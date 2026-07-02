@@ -57,6 +57,6 @@ jobs:
         uses: azure/webapps-deploy@v2
         id: deploy-to-webapp
         with:
-          app-name: 'SecurityScan'
+          app-name: 'RiskGate'
           slot-name: 'Production'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_SECURITYSCAN }}
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_RISKGATE }}
