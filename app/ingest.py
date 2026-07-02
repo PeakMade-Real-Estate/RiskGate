@@ -1,7 +1,7 @@
 """
-Data ingestion for RiskGate.
+Data ingestion for SecurityScan.
 
-Normalizes Microsoft Graph API responses into RiskGate database models.
+Normalizes Microsoft Graph API responses into SecurityScan database models.
 Handles:
 - Sign-in log ingestion
 - Audit log ingestion (MFA/authentication method changes)

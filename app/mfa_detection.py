@@ -7,10 +7,10 @@ Attack chain:
 1. Attacker steals password
 2. Attacker signs in from impossible location
 3. Microsoft login/MFA may still succeed
-4. RiskGate detects impossible travel → marks user risky
+4. SecurityScan detects impossible travel → marks user risky
 5. Soon after, attacker adds their own MFA method
-6. RiskGate correlates MFA change with risky sign-in
-7. RiskGate creates critical alert
+6. SecurityScan correlates MFA change with risky sign-in
+7. SecurityScan creates critical alert
 
 Key insight: MFA success does NOT erase sign-in risk.
 If a user has a risky or impossible login and then changes MFA,

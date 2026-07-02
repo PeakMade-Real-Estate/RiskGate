@@ -1,5 +1,5 @@
 """
-Security Alert Management for RiskGate.
+Security Alert Management for SecurityScan.
 
 Creates and manages security alerts based on detected patterns:
 - Impossible login detection
@@ -7,7 +7,7 @@ Creates and manages security alerts based on detected patterns:
 - Possible MFA takeover
 - Temporary Access Pass after risk
 
-Alerts are the primary output of RiskGate's correlation engine.
+Alerts are the primary output of SecurityScan's correlation engine.
 """
 from datetime import datetime
 from flask import current_app

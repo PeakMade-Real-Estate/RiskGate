@@ -1,5 +1,5 @@
 """
-MFA/Authentication Method change detection for RiskGate.
+MFA/Authentication Method change detection for SecurityScan.
 
 Detects suspicious authentication method changes that may indicate
 account takeover persistence.

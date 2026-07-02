@@ -1,4 +1,4 @@
-# RiskGate - Implementation Summary
+# SecurityScan - Implementation Summary
 
 ## ✅ What Has Been Built
 
@@ -177,7 +177,7 @@ TRAVEL_SPEED_EXTREME = int(os.environ.get('TRAVEL_SPEED_EXTREME', 1000))
 ### 7. Create Comprehensive README.md
 
 A detailed README.md should explain:
-- What RiskGate does and doesn't do
+- What SecurityScan does and doesn't do
 - Microsoft Graph API setup instructions
 - Required permissions
 - Environment variable configuration
@@ -256,13 +256,13 @@ A detailed README.md should explain:
   - Common false positive causes
   - Risk scoring rationale
   - Microsoft Entra as source of truth
-  - What RiskGate can and cannot do
+  - What SecurityScan can and cannot do
   - Account takeover attack patterns
 
 ## 🔐 Security Best Practices Included
 
 - Read-only Microsoft Graph permissions
-- Client credentials flow (no user passwords in RiskGate)
+- Client credentials flow (no user passwords in SecurityScan)
 - Duplicate alert prevention
 - Comprehensive audit logging
 - Risk-aware session tracking
@@ -270,7 +270,7 @@ A detailed README.md should explain:
 
 ## 🎨 Design Principles Followed
 
-1. **Microsoft Entra is the source of truth** - RiskGate is monitoring layer only
+1. **Microsoft Entra is the source of truth** - SecurityScan is monitoring layer only
 2. **Read-only operations** - No destructive writes to Entra
 3. **False positive awareness** - VPN, proxy, mobile routing documented
 4. **Correlation is key** - MFA change after risky login is the critical signal

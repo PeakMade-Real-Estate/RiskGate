@@ -1,5 +1,5 @@
 """
-Database models for the RiskGate security application.
+Database models for the SecurityScan security application.
 """
 from datetime import datetime, timedelta
 from app import db, login_manager

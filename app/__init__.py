@@ -24,7 +24,7 @@ def create_app(config_class=Config):
     
     # Log startup info
     with app.app_context():
-        app.logger.info("RiskGate starting (simplified version - no database)...")
+        app.logger.info("SecurityScan starting (simplified version - no database)...")
         app.logger.info(f"Azure Client ID configured: {'Yes' if app.config.get('AZURE_CLIENT_ID') else 'No'}")
         app.logger.info(f"Azure Client Secret configured: {'Yes' if app.config.get('AZURE_CLIENT_SECRET') else 'No'}")
     

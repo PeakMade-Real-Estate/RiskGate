@@ -165,7 +165,7 @@ if __name__ == '__main__':
         print("\n" + "="*80)
         print("✅ VERIFICATION COMPLETE - Groups API is working!")
         print("="*80)
-        print("\nYour RiskGate app can now:")
+        print("\nYour SecurityScan app can now:")
         print("  • Pull groups from Entra ID")
         print("  • Scan entire groups for impossible travel")
         print("  • Select any group from the dropdown")

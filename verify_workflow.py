@@ -1,5 +1,5 @@
 """
-Verify that RiskGate implements the complete workflow:
+Verify that SecurityScan implements the complete workflow:
 1. Import Microsoft sign-in logs
 2. Store in EntraSignInEvent
 3. Detect impossible travel
@@ -20,7 +20,7 @@ app = create_app()
 
 with app.app_context():
     print("=" * 80)
-    print("RISKGATE WORKFLOW VERIFICATION")
+    print("SECURITYSCAN WORKFLOW VERIFICATION")
     print("=" * 80)
     
     # Step 1-2: Sign-in logs imported and stored

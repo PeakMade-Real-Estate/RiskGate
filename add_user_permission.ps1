@@ -1,4 +1,4 @@
-# Add User.Read.All permission to RiskGate app registration
+# Add User.Read.All permission to SecurityScan app registration
 
 $AppId = "99b0438f-6b8c-41ff-86ee-0116481883ea"
 $GraphAppId = "00000003-0000-0000-c000-000000000000"  # Microsoft Graph

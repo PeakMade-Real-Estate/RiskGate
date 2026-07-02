@@ -1,7 +1,7 @@
 #!/bin/bash
 # Startup script for Azure App Service
 
-echo "Starting RiskGate application..."
+echo "Starting SecurityScan application..."
 
 # Check if we're in Azure (WEBSITE_HOSTNAME is set by Azure)
 if [ -n "$WEBSITE_HOSTNAME" ]; then

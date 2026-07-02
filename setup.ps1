@@ -1,7 +1,7 @@
-# RiskGate Setup Script
+# SecurityScan Setup Script
 # Automates the initial setup process
 
-Write-Host "🛡️ RiskGate - Automated Setup" -ForegroundColor Cyan
+Write-Host "🛡️ SecurityScan - Automated Setup" -ForegroundColor Cyan
 Write-Host "==============================`n" -ForegroundColor Cyan
 
 # Check if Python is installed

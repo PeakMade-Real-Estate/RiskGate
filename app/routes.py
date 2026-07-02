@@ -40,7 +40,7 @@ def root():
     selected_targets = session.get('selected_targets', [default_user] if default_user else [])
     target_display = ', '.join(selected_targets) if isinstance(selected_targets, list) else selected_targets
     
-    return render_template('riskgate_dashboard.html', 
+    return render_template('securityscan_dashboard.html', 
                          impossible_logins_count=impossible_count,
                          target_user=target_display,
                          selected_targets=selected_targets,
@@ -56,10 +56,10 @@ def root():
                          using_mock=session.get('use_mock_data', False))
 
 
-@bp.route('/riskgate-dashboard', methods=['GET'])
-def riskgate_dashboard():
+@bp.route('/securityscan-dashboard', methods=['GET'])
+def securityscan_dashboard():
     """
-    Main RiskGate Dashboard.
+    Main SecurityScan Dashboard.
     """
     return root()
 
@@ -654,7 +654,7 @@ def health():
     """
     return {
         'status': 'ok', 
-        'message': 'RiskGate is running (in-memory mode)',
+        'message': 'SecurityScan is running (in-memory mode)',
         'last_scan': scan_results['last_scan'],
         'signin_logs_count': len(scan_results['signin_logs'])
     }, 200

@@ -1,5 +1,5 @@
 """
-Trusted Location Management for RiskGate.
+Trusted Location Management for SecurityScan.
 
 Learns baseline locations for users to prevent false positives for remote workers.
 A user who consistently logs in from their home office won't trigger travel alerts.

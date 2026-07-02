@@ -1,5 +1,5 @@
 """
-Configuration settings for RiskGate - Microsoft Entra Identity Monitoring.
+Configuration settings for SecurityScan - Microsoft Entra Identity Monitoring.
 
 Environment variables for Microsoft Graph API:
 - AZURE_TENANT_ID: Your Azure AD tenant ID
@@ -37,7 +37,7 @@ class Config:
         SQLALCHEMY_DATABASE_URI = database_url
     else:
         # Use SQLite for local development
-        SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'riskgate.db')
+        SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(basedir, 'securityscan.db')
     
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
@@ -61,7 +61,7 @@ class Config:
         APP_URL = 'https://127.0.0.1:5003'  # Local development with self-signed cert
         SESSION_COOKIE_SECURE = True
     
-    PRODUCTION_URL = 'https://riskgate-e6f4c2gac0a3bjfr.eastus-01.azurewebsites.net'
+    PRODUCTION_URL = 'https://securityscan-e6f4c2gac0a3bjfr.eastus-01.azurewebsites.net'
     
     # MSAL Authentication configuration
     MSAL_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}"

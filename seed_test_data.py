@@ -1,5 +1,5 @@
 """
-Seed test data for RiskGate MFA detection testing.
+Seed test data for SecurityScan MFA detection testing.
 Creates sample EntraSignInEvent and EntraMfaEvent records to demonstrate:
 1. Normal MFA creation (should create low-severity informational alert)
 2. MFA creation after risky sign-in (should create critical alert)

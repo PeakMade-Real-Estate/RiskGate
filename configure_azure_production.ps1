@@ -1,7 +1,7 @@
 # Configure Azure App Service for production (disable test mode)
 # Run this script to configure your production Azure deployment
 
-$appName = "RiskGate"
+$appName = "SecurityScan"
 $resourceGroup = "your-resource-group-name"  # UPDATE THIS
 
 Write-Host "Configuring Azure App Service for production..." -ForegroundColor Cyan

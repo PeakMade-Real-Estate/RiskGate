@@ -1,5 +1,5 @@
 """
-Microsoft Graph API client for RiskGate.
+Microsoft Graph API client for SecurityScan.
 
 Authenticates to Microsoft Graph and fetches:
 - Sign-in logs

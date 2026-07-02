@@ -1,8 +1,8 @@
-# Add Group.Read.All permission to RiskGate app registration
+# Add Group.Read.All permission to SecurityScan app registration
 # This script adds the required Microsoft Graph permission for reading groups
 
 Write-Host "================================================================================" -ForegroundColor Cyan
-Write-Host "ADDING GROUP.READ.ALL PERMISSION TO RISKGATE APP" -ForegroundColor Cyan
+Write-Host "ADDING GROUP.READ.ALL PERMISSION TO SECURITYSCAN APP" -ForegroundColor Cyan
 Write-Host "================================================================================" -ForegroundColor Cyan
 
 $AppId = "99b0438f-6b8c-41ff-86ee-0116481883ea"
@@ -55,7 +55,7 @@ if ($azInstalled) {
         
         Write-Host "`n================================================================================`n" -ForegroundColor Cyan
         Write-Host "SUCCESS! Group.Read.All permission has been added." -ForegroundColor Green
-        Write-Host "`nYour RiskGate app can now:" -ForegroundColor White
+        Write-Host "`nYour SecurityScan app can now:" -ForegroundColor White
         Write-Host "  • Fetch groups from Entra ID" -ForegroundColor White
         Write-Host "  • Read group memberships" -ForegroundColor White
         Write-Host "  • Scan entire groups for impossible travel" -ForegroundColor White

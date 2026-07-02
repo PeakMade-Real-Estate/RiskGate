@@ -1,4 +1,4 @@
-# RiskGate 🛡️
+# SecurityScan 🛡️
 
 **Impossible Login Detection & MFA Fraud Prevention**
 
@@ -10,7 +10,7 @@ A Flask application demonstrating advanced security techniques for detecting imp
 
 ## 🎯 Purpose
 
-This application addresses a critical security gap: **attackers who steal passwords and successfully pass MFA can still hijack accounts by adding their own MFA methods**. RiskGate prevents this attack vector by:
+This application addresses a critical security gap: **attackers who steal passwords and successfully pass MFA can still hijack accounts by adding their own MFA methods**. SecurityScan prevents this attack vector by:
 
 1. **Detecting impossible logins** using geographic and temporal analysis
 2. **Assigning risk scores** to login sessions based on multiple factors
@@ -19,9 +19,9 @@ This application addresses a critical security gap: **attackers who steal passwo
 
 ---
 
-## 🚨 The Attack Chain RiskGate Prevents
+## 🚨 The Attack Chain SecurityScan Prevents
 
-**Without RiskGate:**
+**Without SecurityScan:**
 1. Attacker steals user password (phishing, breach, etc.)
 2. Attacker logs in from strange location (impossible travel)
 3. Attacker successfully passes or tricks existing MFA
@@ -29,7 +29,7 @@ This application addresses a critical security gap: **attackers who steal passwo
 5. ⚠️ **Attacker removes or disables original MFA**
 6. User is permanently locked out
 
-**With RiskGate:**
+**With SecurityScan:**
 1. Attacker steals user password
 2. Attacker logs in from strange location
 3. ✅ **System detects impossible travel**
@@ -68,14 +68,14 @@ Simply measuring distance between logins isn't sufficient:
 - If 10 hours passed between logins, this is **legitimate** (~480 mph travel speed)
 - If 30 minutes passed, this is **impossible** (~9,600 mph required)
 
-**RiskGate calculates required travel speed:**
+**SecurityScan calculates required travel speed:**
 ```python
 required_speed = distance_miles / hours_between_logins
 ```
 
 ### Risk Score Thresholds
 
-RiskGate assigns numeric risk scores based on suspicious factors:
+SecurityScan assigns numeric risk scores based on suspicious factors:
 
 | Risk Score | Level    | Description                                    |
 |-----------|----------|------------------------------------------------|
@@ -103,7 +103,7 @@ RiskGate assigns numeric risk scores based on suspicious factors:
 - SIM swapping for SMS-based MFA
 - Phishing sites that relay MFA codes in real-time
 
-**RiskGate's approach:**
+**SecurityScan's approach:**
 - MFA verification is required but not sufficient
 - Login risk score persists even after successful MFA
 - Risky sessions have limited privileges
@@ -292,7 +292,7 @@ Tracks devices explicitly trusted by users.
 
 1. **Clone or download this repository**
    ```bash
-   cd path/to/RiskGate
+   cd path/to/SecurityScan
    ```
 
 2. **Create a virtual environment (recommended)**
@@ -584,4 +584,4 @@ For a production implementation, consult with security professionals and follow 
 ---
 
 **Built with ❤️ and 🔐 to demonstrate advanced authentication security techniques.**
-# RiskGate
+# SecurityScan

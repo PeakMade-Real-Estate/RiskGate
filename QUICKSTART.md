@@ -1,8 +1,8 @@
-# RiskGate - Quick Start Guide
+# SecurityScan - Quick Start Guide
 
 ## First Time Setup
 
-Follow these steps to get RiskGate up and running:
+Follow these steps to get SecurityScan up and running:
 
 ### 1. Install Dependencies
 ```powershell
@@ -58,7 +58,7 @@ The application will start on http://localhost:5000
 If you get database errors, delete the existing database and migrations:
 ```powershell
 # Remove database file
-Remove-Item riskgate.db -ErrorAction SilentlyContinue
+Remove-Item securityscan.db -ErrorAction SilentlyContinue
 
 # Remove migrations folder
 Remove-Item -Recurse -Force migrations -ErrorAction SilentlyContinue

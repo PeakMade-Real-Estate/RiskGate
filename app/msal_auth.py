@@ -1,5 +1,5 @@
 """
-Microsoft Authentication Library (MSAL) integration for RiskGate.
+Microsoft Authentication Library (MSAL) integration for SecurityScan.
 Handles OAuth 2.0 authentication flow with Microsoft/Entra ID.
 """
 import msal

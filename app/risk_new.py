@@ -12,7 +12,7 @@ Important: Impossible travel can have false positives due to:
 - Cloud services with distributed edge locations
 - Inaccurate IP geolocation databases
 
-RiskGate raises risk and triggers investigation.
+SecurityScan raises risk and triggers investigation.
 The app explains these limitations to users.
 """
 import math

@@ -1,5 +1,5 @@
 """
-Risk detection and impossible travel analysis for RiskGate.
+Risk detection and impossible travel analysis for SecurityScan.
 
 Core logic for identifying suspicious login patterns from Microsoft Entra sign-in logs.
 

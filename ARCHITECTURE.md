@@ -1,8 +1,8 @@
-# RiskGate Architecture Overview
+# SecurityScan Architecture Overview
 
 ## System Architecture
 
-RiskGate is built using a modular Flask architecture with clear separation of concerns:
+SecurityScan is built using a modular Flask architecture with clear separation of concerns:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐

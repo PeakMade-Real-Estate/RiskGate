@@ -1,7 +1,7 @@
 # Configure Azure App Service to build during deployment
 # This enables Oryx to install Python dependencies automatically
 
-$appName = "RiskGate"
+$appName = "SecurityScan"
 $resourceGroup = "your-resource-group-name"  # UPDATE THIS
 
 Write-Host "Configuring Azure App Service build settings..." -ForegroundColor Cyan

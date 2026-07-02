@@ -19,7 +19,7 @@ subject = issuer = x509.Name([
     x509.NameAttribute(NameOID.COUNTRY_NAME, "US"),
     x509.NameAttribute(NameOID.STATE_OR_PROVINCE_NAME, "State"),
     x509.NameAttribute(NameOID.LOCALITY_NAME, "City"),
-    x509.NameAttribute(NameOID.ORGANIZATION_NAME, "RiskGate"),
+    x509.NameAttribute(NameOID.ORGANIZATION_NAME, "SecurityScan"),
     x509.NameAttribute(NameOID.COMMON_NAME, "localhost"),
 ])
 

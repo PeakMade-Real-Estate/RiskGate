@@ -1,5 +1,5 @@
 """
-Security alert creation and management for RiskGate.
+Security alert creation and management for SecurityScan.
 
 Creates security alerts when suspicious patterns are detected:
 - Impossible login
