@@ -4,8 +4,89 @@ Generates realistic sign-in logs with impossible travel scenarios.
 """
 from datetime import datetime, timedelta
 import random
+import hashlib
 
-def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
+# Configurable list of mock users - easily add/remove users for testing
+MOCK_USERS = [
+    {'userPrincipalName': 'tgaskins@peakmade.com', 'displayName': 'Tom Gaskins', 'department': 'IT'},
+    {'userPrincipalName': 'jbehner@peakmade.com', 'displayName': 'John Behner', 'department': 'Finance'},
+    {'userPrincipalName': 'mdoe@peakmade.com', 'displayName': 'Mary Doe', 'department': 'HR'},
+    {'userPrincipalName': 'sjones@peakmade.com', 'displayName': 'Sarah Jones', 'department': 'Sales'},
+    {'userPrincipalName': 'rsmith@peakmade.com', 'displayName': 'Robert Smith', 'department': 'Engineering'},
+]
+
+# Mock groups with members - matching organizational groups
+MOCK_GROUPS = [
+    {
+        'id': 'mock-group-technology',
+        'displayName': 'Technology',
+        'mail': 'technology@peakmade.com',
+        'members': ['tgaskins@peakmade.com', 'rsmith@peakmade.com']
+    },
+    {
+        'id': 'mock-group-development',
+        'displayName': 'Development',
+        'mail': 'development@peakmade.com',
+        'members': ['rsmith@peakmade.com']
+    },
+    {
+        'id': 'mock-group-accounting',
+        'displayName': 'Accounting',
+        'mail': 'accounting@peakmade.com',
+        'members': ['jbehner@peakmade.com']
+    },
+    {
+        'id': 'mock-group-pops',
+        'displayName': 'POPS',
+        'mail': 'pops@peakmade.com',
+        'members': ['sjones@peakmade.com', 'mdoe@peakmade.com']
+    }
+]
+
+
+def get_mock_users():
+    """
+    Get list of available mock users.
+    Returns list of dicts with userPrincipalName, displayName, department.
+    """
+    return MOCK_USERS
+
+
+def get_mock_groups():
+    """
+    Get list of available mock groups with member counts.
+    """
+    return [
+        {
+            'id': g['id'],
+            'displayName': g['displayName'],
+            'mail': g.get('mail', ''),
+            'memberCount': len(g['members'])
+        }
+        for g in MOCK_GROUPS
+    ]
+
+
+def get_mock_group_members(group_id):
+    """
+    Get members of a specific mock group.
+    """
+    for group in MOCK_GROUPS:
+        if group['id'] == group_id:
+            # Return full user info for members
+            return [
+                user for user in MOCK_USERS
+                if user['userPrincipalName'] in group['members']
+            ]
+    return []
+
+
+def _generate_user_id(email):
+    """Generate consistent mock user ID from email using hash."""
+    return 'mock-user-' + hashlib.md5(email.encode()).hexdigest()[:12]
+
+
+def generate_mock_signin_logs(target_user, days_back=7):
     """
     Generate realistic mock sign-in logs for testing.
     Includes some impossible travel scenarios.
@@ -39,6 +120,7 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     
     logs = []
     current_time = datetime.utcnow()
+    user_id = _generate_user_id(target_user)
     
     # Generate normal sign-ins
     for i in range(15):
@@ -46,10 +128,10 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
         location = random.choice(locations[:3])  # Mostly US locations
         
         log = {
-            'id': f'mock-signin-{i}',
+            'id': f'mock-signin-{target_user}-{i}',
             'createdDateTime': timestamp.strftime('%Y-%m-%dT%H:%M:%SZ'),
             'userPrincipalName': target_user,
-            'userId': 'mock-user-id-12345',
+            'userId': user_id,
             'appDisplayName': random.choice(apps),
             'clientAppUsed': 'Browser',
             'deviceDetail': {
@@ -81,10 +163,10 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     # Scenario 1: Seattle -> Tokyo (1 hour apart - impossible!)
     impossible_time_1 = current_time - timedelta(hours=5)
     logs.append({
-        'id': 'mock-signin-impossible-1',
+        'id': f'mock-signin-impossible-1-{target_user}',
         'createdDateTime': impossible_time_1.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'userPrincipalName': target_user,
-        'userId': 'mock-user-id-12345',
+        'userId': user_id,
         'appDisplayName': 'Office 365',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
@@ -101,10 +183,10 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     })
     
     logs.append({
-        'id': 'mock-signin-impossible-2',
+        'id': f'mock-signin-impossible-2-{target_user}',
         'createdDateTime': (impossible_time_1 + timedelta(hours=1)).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'userPrincipalName': target_user,
-        'userId': 'mock-user-id-12345',
+        'userId': user_id,
         'appDisplayName': 'Azure Portal',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
@@ -123,10 +205,10 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     # Scenario 2: London -> Sydney (2 hours apart - impossible!)
     impossible_time_2 = current_time - timedelta(hours=12)
     logs.append({
-        'id': 'mock-signin-impossible-3',
+        'id': f'mock-signin-impossible-3-{target_user}',
         'createdDateTime': impossible_time_2.strftime('%Y-%m-%dT%H:%M:%SZ'),
         'userPrincipalName': target_user,
-        'userId': 'mock-user-id-12345',
+        'userId': user_id,
         'appDisplayName': 'Microsoft Teams',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
@@ -143,10 +225,10 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     })
     
     logs.append({
-        'id': 'mock-signin-impossible-4',
+        'id': f'mock-signin-impossible-4-{target_user}',
         'createdDateTime': (impossible_time_2 + timedelta(hours=2)).strftime('%Y-%m-%dT%H:%M:%SZ'),
         'userPrincipalName': target_user,
-        'userId': 'mock-user-id-12345',
+        'userId': user_id,
         'appDisplayName': 'SharePoint',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
@@ -168,12 +250,25 @@ def generate_mock_signin_logs(target_user='tgaskins@peakmade.com', days_back=7):
     return logs
 
 
-def generate_mock_user_info(email='tgaskins@peakmade.com'):
-    """Generate mock user information."""
+def generate_mock_user_info(email):
+    """Generate mock user information with consistent ID."""
+    # Find user in MOCK_USERS list
+    for user in MOCK_USERS:
+        if user['userPrincipalName'] == email:
+            return {
+                'id': _generate_user_id(email),
+                'userPrincipalName': email,
+                'displayName': user['displayName'],
+                'mail': email,
+                'department': user.get('department', 'Unknown'),
+                'accountEnabled': True
+            }
+    
+    # If not in list, generate generic info
     return {
-        'id': 'mock-user-id-12345',
+        'id': _generate_user_id(email),
         'userPrincipalName': email,
-        'displayName': 'Test User',
+        'displayName': email.split('@')[0].title(),
         'mail': email,
         'accountEnabled': True
     }

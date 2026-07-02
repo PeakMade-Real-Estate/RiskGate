@@ -6,18 +6,27 @@
 {% block content %}
 <div class="container-fluid py-2">
     
-    <!-- Flash Messages -->
-    {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-            {% for category, message in messages %}
-                <div class="alert alert-{{ category }} alert-dismissible fade show py-2 mb-2" role="alert">
-                    <small>{{ message }}</small>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                </div>
-            {% endfor %}
-        {% endif %}
-    {% endwith %}
-
+    <!-- Data Mode Indicator Banner -->
+    {% if using_mock %}
+    <div class="alert alert-warning py-2 mb-2" style="border-left: 4px solid #ff9800;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-flask me-2" style="font-size: 1.2rem;"></i>
+            <div>
+                <strong>MOCK DATA MODE</strong> - Using test data with impossible travel scenarios for testing detection algorithms
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="alert alert-success py-2 mb-2" style="border-left: 4px solid #28a745;">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-cloud me-2" style="font-size: 1.2rem;"></i>
+            <div>
+                <strong>REAL DATA MODE</strong> - Querying Microsoft Entra ID for actual sign-in logs
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Results Section -->
     <div class="card mb-2 shadow-sm">
         <div class="card-body p-2">
@@ -37,29 +46,64 @@
                     </div>
                 </div>
                 
-                <!-- Target User Display -->
-                <div class="col-md-5">
+                <!-- Target User/Group Display -->
+                <div class="col-md-4">
                     <div class="alert alert-light mb-0 py-1 px-2" style="border-left: 3px solid #6c757d;">
-                        <small class="text-muted d-block" style="font-size: 0.75rem;">Monitoring User</small>
-                        <div style="font-weight: 600; font-size: 0.9rem;">
-                            <i class="fas fa-user-circle me-1"></i>{{ target_user }}
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div style="flex: 1;">
+                                <small class="text-muted d-block" style="font-size: 0.75rem;">Scan Target</small>
+                                <div style="font-weight: 600; font-size: 0.85rem;">
+                                    <i class="fas fa-users me-1"></i>
+                                    <span id="targetDisplay">{{ target_user }}</span>
+                                </div>
+                                {% if last_scan %}
+                                <small class="text-muted" style="font-size: 0.7rem;">
+                                    <i class="fas fa-clock me-1"></i>Last: {{ last_scan }}
+                                </small>
+                                {% endif %}
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" style="font-size: 0.7rem; padding: 2px 6px;" data-bs-toggle="modal" data-bs-target="#userSelectorModal">
+                                <i class="fas fa-edit"></i>
+                            </button>
                         </div>
-                        {% if last_scan %}
-                        <small class="text-muted" style="font-size: 0.7rem;">
-                            <i class="fas fa-clock me-1"></i>Last scan: {{ last_scan }}
-                        </small>
-                        {% endif %}
                     </div>
                 </div>
                 
+                <!-- Data Source Toggle -->
+                <div class="col-md-1">
+                    <form method="POST" action="{{ url_for('main.toggle_mode') }}" class="mb-0">
+                        <button type="submit" class="btn btn-sm w-100" 
+                                style="{% if using_mock %}background-color: #ff9800; color: white;{% else %}background-color: #28a745; color: white;{% endif %} font-weight: 600; font-size: 0.7rem; padding: 4px;">
+                            {% if using_mock %}
+                            <i class="fas fa-flask me-1"></i>MOCK
+                            {% else %}
+                            <i class="fas fa-cloud me-1"></i>REAL
+                            {% endif %}
+                        </button>
+                        <small class="text-muted d-block text-center" style="font-size: 0.6rem; margin-top: 2px;">Click to toggle</small>
+                    </form>
+                </div>
+                
                 <!-- Action Buttons -->
-                <div class="col-md-4">
-                    <form method="POST" action="{{ url_for('main.scan_entra') }}" class="mb-0">
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary btn-sm flex-fill" style="font-weight: 600; font-size: 0.85rem;">
-                                <i class="fas fa-search me-1"></i>Scan Entra
+                <div class="col-md-3">
+                    <form method="POST" action="{{ url_for('main.scan_entra') }}" class="mb-0" id="scanForm" onsubmit="showSpinner()">
+                        <input type="hidden" name="scan_type" id="scanType" value="user">
+                        <input type="hidden" name="target_value" id="targetValue" value="tgaskins@peakmade.com">
+                        <div class="d-flex gap-1">
+                            <button type="submit" class="btn btn-primary btn-sm" id="scanButton" style="font-weight: 600; font-size: 0.75rem; flex: 2;">
+                                <span id="scanButtonText">
+                                    <i class="fas fa-search me-1"></i>Scan
+                                </span>
+                                <span id="scanButtonSpinner" class="d-none">
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                    Scanning...
+                                </span>
                             </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm flex-fill" style="font-weight: 600; font-size: 0.85rem;"
+                            <button type="button" class="btn btn-outline-danger btn-sm" style="font-weight: 600; font-size: 0.75rem; flex: 1;"
+                                    onclick="if(confirm('Clear all scan results?')) document.getElementById('clearForm').submit();">
+                                <i class="fas fa-trash me-1"></i>Clear
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" style="font-weight: 600; font-size: 0.75rem; flex: 1.5;"
                                     onclick="document.getElementById('reportForm').submit();">
                                 <i class="fas fa-envelope me-1"></i>Report
                             </button>
@@ -72,6 +116,10 @@
     
     <!-- Hidden form for report action -->
     <form id="reportForm" method="POST" action="{{ url_for('main.report_findings') }}" style="display: none;">
+    </form>
+    
+    <!-- Hidden form for clear action -->
+    <form id="clearForm" method="POST" action="{{ url_for('main.clear_scan') }}" style="display: none;">
     </form>
 
 
@@ -89,66 +137,88 @@
             
             {% if recent_alerts %}
                 <div class="table-responsive">
-                    <table class="table table-hover table-sm mb-0" style="font-size: 0.85rem;">
+                    <table class="table table-hover table-sm mb-0" style="font-size: 0.8rem;">
                         <thead style="background-color: #f8f9fa;">
                             <tr>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">Time</th>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">User</th>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">Finding</th>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">Risk</th>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">Details</th>
-                                <th scope="col" style="padding: 6px 8px; font-weight: 600;">Status</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Time</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">User</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">From → To</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Distance</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Time</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Speed</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Device</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">IP</th>
+                                <th scope="col" style="padding: 4px 6px; font-weight: 600;">Risk Level</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {% set current_user = '' %}
                             {% for alert in recent_alerts %}
-                                <tr>
-                                    <td style="padding: 6px 8px;">{{ alert.time }}</td>
-                                    <td style="padding: 6px 8px;">
-                                        <i class="fas fa-user-circle me-1" style="color: #6c757d; font-size: 0.75rem;"></i>
-                                        <span style="font-size: 0.8rem;">{{ alert.user }}</span>
+                                {% if 'CRITICAL - MFA' in alert.risk_level %}
+                                    {% set border_color = '#8b0000' %}
+                                    {% set bg_color = '#ffe0e0' %}
+                                {% elif alert.required_speed_mph > 10000 %}
+                                    {% set border_color = '#dc3545' %}
+                                    {% set bg_color = '#fff5f5' %}
+                                {% elif alert.required_speed_mph > 1000 %}
+                                    {% set border_color = '#ff6b6b' %}
+                                    {% set bg_color = '#ffffff' %}
+                                {% else %}
+                                    {% set border_color = '#ffc107' %}
+                                    {% set bg_color = '#ffffff' %}
+                                {% endif %}
+                                
+                                {# Add visual separator when user changes #}
+                                {% if alert.user != current_user and not loop.first %}
+                                <tr style="height: 3px; background-color: #e9ecef;">
+                                    <td colspan="9" style="padding: 0; border-top: 2px solid #dee2e6;"></td>
+                                </tr>
+                                {% endif %}
+                                {% set current_user = alert.user %}
+                                
+                                <tr style="border-left: 4px solid {{ border_color }}; background-color: {{ bg_color }};">
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">{{ alert.time }}</td>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">
+                                        <strong>{{ alert.user.split('@')[0] }}</strong>
+                                        <br><small style="color: #6c757d;">{{ alert.user }}</small>
                                     </td>
-                                    <td style="padding: 6px 8px;">
-                                        <span class="badge" style="background-color: #dc3545; font-size: 0.75rem; padding: 2px 6px;">
-                                            {{ alert.finding }}
-                                        </span>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">
+                                        <div>
+                                            <i class="fas fa-map-marker-alt" style="color: #6c757d;"></i>
+                                            {{ alert.previous_location }}
+                                        </div>
+                                        <div style="margin-top: 2px;">
+                                            <i class="fas fa-arrow-down" style="color: #dc3545;"></i>
+                                            <strong>{{ alert.location }}</strong>
+                                        </div>
                                     </td>
-                                    <td style="padding: 6px 8px;">
-                                        {% if alert.risk_level == 'Critical' %}
-                                            <span class="badge bg-danger" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.risk_level }}
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">
+                                        <strong>{{ alert.distance_miles }}</strong> mi
+                                    </td>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">
+                                        <strong>{{ alert.time_between_hours }}</strong> hrs
+                                    </td>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">
+                                        <strong style="color: #dc3545;">{{ alert.required_speed_mph }}</strong> mph
+                                    </td>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem;">{{ alert.device }}</td>
+                                    <td style="padding: 4px 6px; font-size: 0.75rem; font-family: monospace;">{{ alert.ip_address }}</td>
+                                    <td style="padding: 4px 6px;">
+                                        {% if 'CRITICAL - MFA' in alert.risk_level %}
+                                            <span class="badge" style="background-color: #8b0000; font-size: 0.7rem; padding: 2px 6px;">
+                                                🚨 {{ alert.risk_level }}
                                             </span>
-                                        {% elif alert.risk_level == 'High' %}
-                                            <span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.risk_level }}
+                                        {% elif alert.required_speed_mph > 10000 %}
+                                            <span class="badge bg-danger" style="font-size: 0.7rem; padding: 2px 6px;">
+                                                ⚠️ CRITICAL
                                             </span>
-                                        {% elif alert.risk_level == 'Medium' %}
-                                            <span class="badge bg-info" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.risk_level }}
+                                        {% elif alert.required_speed_mph > 1000 %}
+                                            <span class="badge" style="background-color: #dc3545; font-size: 0.7rem; padding: 2px 6px;">
+                                                ⚠️ HIGH RISK
                                             </span>
                                         {% else %}
-                                            <span class="badge bg-secondary" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.risk_level }}
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td style="padding: 6px 8px; font-size: 0.8rem;">{{ alert.details }}</td>
-                                    <td style="padding: 6px 8px;">
-                                        {% if alert.status == 'Open' %}
-                                            <span class="badge bg-danger" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.status }}
-                                            </span>
-                                        {% elif alert.status == 'Investigating' %}
-                                            <span class="badge bg-warning text-dark" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.status }}
-                                            </span>
-                                        {% elif alert.status == 'Resolved' %}
-                                            <span class="badge bg-success" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.status }}
-                                            </span>
-                                        {% else %}
-                                            <span class="badge bg-secondary" style="font-size: 0.75rem; padding: 2px 6px;">
-                                                {{ alert.status }}
+                                            <span class="badge bg-warning text-dark" style="font-size: 0.7rem; padding: 2px 6px;">
+                                                ⚠️ SUSPICIOUS
                                             </span>
                                         {% endif %}
                                     </td>
@@ -167,6 +237,190 @@
         </div>
     </div>
 
+    <!-- Scanned Users Summary -->
+    {% if scanned_users %}
+    <div class="card shadow-sm mt-2">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white; padding: 6px 12px;">
+            <small class="mb-0" style="font-weight: 600;">
+                <i class="fas fa-users me-1"></i>Scanned Users ({{ scanned_users|length }} total)
+            </small>
+            <button class="btn btn-sm btn-light" style="font-size: 0.7rem; padding: 2px 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#scannedUsersCollapse" aria-expanded="false" aria-controls="scannedUsersCollapse">
+                <i class="fas fa-chevron-down"></i> Show/Hide
+            </button>
+        </div>
+        <div class="collapse" id="scannedUsersCollapse">
+            <div class="card-body p-2">
+                <div class="row">
+                    {% if users_with_activity %}
+                    <div class="col-md-6">
+                        <div class="alert alert-success mb-1" style="padding: 6px 8px; border-left: 3px solid #28a745;">
+                            <small class="d-block mb-1" style="font-weight: 600; font-size: 0.7rem;">
+                                <i class="fas fa-check-circle me-1"></i>With Activity ({{ users_with_activity|length }})
+                            </small>
+                            <div style="font-size: 0.68rem; line-height: 1.4;">
+                                {% for user in users_with_activity %}
+                                    <span class="badge bg-success me-1 mb-1" style="font-weight: normal;">{{ user.split('@')[0] }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    {% if users_without_activity %}
+                    <div class="col-md-6">
+                        <div class="alert alert-secondary mb-1" style="padding: 6px 8px; border-left: 3px solid #6c757d;">
+                            <small class="d-block mb-1" style="font-weight: 600; font-size: 0.7rem;">
+                                <i class="fas fa-minus-circle me-1"></i>No Activity ({{ users_without_activity|length }})
+                            </small>
+                            <div style="font-size: 0.68rem; line-height: 1.4;">
+                                {% for user in users_without_activity %}
+                                    <span class="badge bg-secondary me-1 mb-1" style="font-weight: normal;">{{ user.split('@')[0] }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                <small class="text-muted" style="font-size: 0.65rem; display: block; margin-top: 4px;">
+                    <i class="fas fa-info-circle me-1"></i>Shows sign-in activity in the last 24 hours
+                </small>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- All Sign-In Logs Section -->
+    {% if all_signin_logs %}
+    <div class="card shadow-sm mt-2">
+        <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); color: white; padding: 6px 12px;">
+            <small class="mb-0" style="font-weight: 600;">
+                <i class="fas fa-list me-1"></i>All Sign-In Activity ({{ total_signin_count }} events)
+            </small>
+            <button class="btn btn-sm btn-light" style="font-size: 0.7rem; padding: 2px 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#signinLogsCollapse" aria-expanded="true" aria-controls="signinLogsCollapse">
+                <i class="fas fa-chevron-down"></i> Show/Hide
+            </button>
+        </div>
+        <div class="collapse show" id="signinLogsCollapse">
+            <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                    <table class="table table-sm table-hover mb-0" style="font-size: 0.7rem;">
+                        <thead style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+                            <tr>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Time</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">User</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Location</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Device</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">IP Address</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Application</th>
+                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set current_user = '' %}
+                            {% for log in all_signin_logs %}
+                                {# Add visual separator when user changes #}
+                                {% if log.user != current_user and not loop.first %}
+                                <tr style="height: 3px; background-color: #e9ecef;">
+                                    <td colspan="7" style="padding: 0; border-top: 2px solid #dee2e6;"></td>
+                                </tr>
+                                {% endif %}
+                                {% set current_user = log.user %}
+                                
+                                <tr {% if log.is_impossible %}style="background-color: #ffe6e6; border-left: 3px solid #dc3545;"{% endif %}>
+                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.time }}</td>
+                                    <td style="padding: 3px 4px; font-size: 0.68rem;">
+                                        <strong>{{ log.user.split('@')[0] }}</strong>
+                                    </td>
+                                    <td style="padding: 3px 4px; font-size: 0.68rem;">
+                                        <i class="fas fa-map-marker-alt me-1" style="color: {% if log.is_impossible %}#dc3545{% else %}#6c757d{% endif %}; font-size: 0.65rem;"></i>
+                                        {{ log.location }}
+                                    </td>
+                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.device }}</td>
+                                    <td style="padding: 3px 4px; font-family: monospace; font-size: 0.65rem;">{{ log.ip_address }}</td>
+                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.app }}</td>
+                                    <td style="padding: 3px 4px;">
+                                        {% if log.is_impossible %}
+                                            <span class="badge bg-danger" style="font-size: 0.65rem;">⚠️ IMPOSSIBLE</span>
+                                        {% elif log.status == 0 %}
+                                            <span class="badge bg-success" style="font-size: 0.65rem;">✓ Success</span>
+                                        {% else %}
+                                            <span class="badge bg-warning" style="font-size: 0.65rem;">Failed</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+
+<!-- User/Group Selector Modal -->
+<div class="modal fade" id="userSelectorModal" tabindex="-1" aria-labelledby="userSelectorModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="userSelectorModalLabel">
+                    <i class="fas fa-users me-2"></i>Select Scan Target
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Selection Type Tabs -->
+                <ul class="nav nav-tabs mb-3" id="scanTypeTabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="user-tab" data-bs-toggle="tab" data-bs-target="#user-pane" type="button" role="tab">
+                            <i class="fas fa-user me-1"></i>Single User
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="group-tab" data-bs-toggle="tab" data-bs-target="#group-pane" type="button" role="tab">
+                            <i class="fas fa-users me-1"></i>Group
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Tab Content -->
+                <div class="tab-content" id="scanTypeTabsContent">
+                    <!-- Single User Tab -->
+                    <div class="tab-pane fade show active" id="user-pane" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="userInput" class="form-label">User Principal Name (email)</label>
+                            <input type="text" class="form-control" id="userInput" placeholder="user@domain.com" value="tgaskins@peakmade.com">
+                            <small class="form-text text-muted">Enter one email address or comma-separated list</small>
+                        </div>
+                    </div>
+                    
+                    <!-- Group Tab -->
+                    <div class="tab-pane fade" id="group-pane" role="tabpanel">
+                        <div class="mb-3">
+                            <label for="groupSelect" class="form-label">Select Entra Group</label>
+                            <select class="form-select" id="groupSelect" onchange="onGroupSelectChange()">
+                                <option value="">-- Loading groups... --</option>
+                            </select>
+                            <small class="form-text text-muted">
+                                <i class="fas fa-users me-1"></i>Select a distribution group to scan
+                            </small>
+                        </div>
+                        
+                        <div id="groupMembersInfo" class="alert alert-info d-none" style="font-size: 0.85rem;">
+                            <i class="fas fa-users me-1"></i>
+                            <span id="memberCountText">0 members</span> will be scanned
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="applySelection()">
+                    <i class="fas fa-check me-1"></i>Apply Selection
+                </button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <!-- Integration Notes (visible in HTML source for developers) -->
@@ -202,4 +456,120 @@
        - Future: Add MFA change counts from EntraMfaEvent
        - Future: Add last scan timestamp
 -->
+
+<script>
+function showSpinner() {
+    // Hide button text and show spinner
+    document.getElementById('scanButtonText').classList.add('d-none');
+    document.getElementById('scanButtonSpinner').classList.remove('d-none');
+    // Disable button to prevent multiple clicks
+    document.getElementById('scanButton').disabled = true;
+}
+
+let currentGroups = [];
+let selectedGroup = null;
+
+// Load groups when modal opens
+document.getElementById('userSelectorModal').addEventListener('show.bs.modal', function() {
+    loadGroups();
+});
+
+// When group is selected from dropdown
+function onGroupSelectChange() {
+    const groupSelect = document.getElementById('groupSelect');
+    const groupId = groupSelect.value;
+    
+    if (!groupId) {
+        document.getElementById('groupMembersInfo').classList.add('d-none');
+        selectedGroup = null;
+        return;
+    }
+    
+    // Find matching group by ID
+    selectedGroup = currentGroups.find(g => g.id === groupId);
+    
+    if (selectedGroup) {
+        loadGroupMembers(selectedGroup.id);
+    }
+}
+
+function loadGroups() {
+    const groupSelect = document.getElementById('groupSelect');
+    
+    groupSelect.innerHTML = '<option value="">-- Loading groups... --</option>';
+    
+    fetch('{{ url_for("main.get_groups") }}')
+        .then(response => response.json())
+        .then(data => {
+            currentGroups = data.groups;
+            
+            // Populate dropdown with groups
+            groupSelect.innerHTML = '<option value="">-- Select a group --</option>';
+            data.groups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = group.displayName;
+                groupSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading groups:', error);
+            groupSelect.innerHTML = '<option value="">-- Error loading groups --</option>';
+        });
+}
+
+function loadGroupMembers(groupId) {
+    fetch(`{{ url_for('main.get_group_members', group_id='GROUP_ID') }}`.replace('GROUP_ID', groupId))
+        .then(response => response.json())
+        .then(data => {
+            const memberCount = data.members.length;
+            document.getElementById('memberCountText').textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
+            document.getElementById('groupMembersInfo').classList.remove('d-none');
+        })
+        .catch(error => {
+            console.error('Error loading group members:', error);
+        });
+}
+
+function applySelection() {
+    const activeTab = document.querySelector('#scanTypeTabs .nav-link.active').id;
+    
+    if (activeTab === 'user-tab') {
+        // Single user mode
+        const userInput = document.getElementById('userInput').value.trim();
+        if (!userInput) {
+            alert('Please enter a user email address');
+            return;
+        }
+        document.getElementById('scanType').value = 'user';
+        document.getElementById('targetValue').value = userInput;
+        document.getElementById('targetDisplay').textContent = userInput;
+    } else {
+        // Group mode - use the dropdown selection
+        const groupSelect = document.getElementById('groupSelect');
+        const groupId = groupSelect.value;
+        
+        if (!groupId) {
+            alert('Please select a group from the dropdown');
+            return;
+        }
+        
+        document.getElementById('scanType').value = 'group';
+        
+        if (selectedGroup) {
+            // Use the selected group
+            document.getElementById('targetValue').value = selectedGroup.id;
+            document.getElementById('targetDisplay').textContent = selectedGroup.displayName + ' (Group)';
+        } else {
+            alert('Please select a valid group');
+            return;
+        }
+    }
+    
+    // Close modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('userSelectorModal'));
+    modal.hide();
+}
+</script>
+
 {% endblock %}

@@ -75,13 +75,14 @@ class GraphClient:
             current_app.logger.error(f"Failed to obtain access token: {e}")
             return None
     
-    def _make_request(self, url, params=None):
+    def _make_request(self, url, params=None, extra_headers=None):
         """
         Make authenticated request to Microsoft Graph.
         
         Args:
             url: Full Graph API URL
             params: Optional query parameters
+            extra_headers: Optional additional headers to include
         
         Returns:
             Response JSON or None if error
@@ -95,10 +96,18 @@ class GraphClient:
             'Content-Type': 'application/json'
         }
         
+        # Add any extra headers
+        if extra_headers:
+            headers.update(extra_headers)
+        
         try:
-            response = requests.get(url, headers=headers, params=params, timeout=60)
+            response = requests.get(url, headers=headers, params=params, timeout=300)
             response.raise_for_status()
             return response.json()
+        except requests.exceptions.Timeout as e:
+            current_app.logger.error(f"Graph API TIMEOUT for {url}: Query took longer than 300 seconds")
+            current_app.logger.error(f"Query parameters: {params}")
+            return None
         except requests.exceptions.HTTPError as e:
             current_app.logger.error(f"Graph API HTTP error for {url}: {e}")
             current_app.logger.error(f"Response status: {response.status_code}")
@@ -108,13 +117,14 @@ class GraphClient:
             current_app.logger.error(f"Graph API request failed for {url}: {e}")
             return None
     
-    def fetch_signin_logs(self, hours_back=24, max_results=1000):
+    def fetch_signin_logs(self, hours_back=24, max_results=1000, user_principal_name=None):
         """
         Fetch sign-in logs from Microsoft Graph.
         
         Args:
             hours_back: How many hours of history to fetch (default 24)
             max_results: Maximum number of results (default 1000)
+            user_principal_name: Optional - filter for specific user (e.g., 'tgaskins@peakmade.com')
         
         Returns:
             List of sign-in log records
@@ -123,16 +133,22 @@ class GraphClient:
         filter_time = datetime.utcnow() - timedelta(hours=hours_back)
         filter_time_str = filter_time.strftime('%Y-%m-%dT%H:%M:%SZ')
         
+        # Build filter - add user filter if specified
+        filter_parts = [f"createdDateTime ge {filter_time_str}"]
+        if user_principal_name:
+            filter_parts.append(f"userPrincipalName eq '{user_principal_name}'")
+        
         url = "https://graph.microsoft.com/v1.0/auditLogs/signIns"
         params = {
-            '$filter': f"createdDateTime ge {filter_time_str}",
-            '$top': max_results,
-            '$orderby': 'createdDateTime desc'
+            '$filter': ' and '.join(filter_parts),
+            '$top': max_results
+            # Removed orderby to avoid timeout issues
         }
         
         current_app.logger.info(f"Fetching sign-in logs from last {hours_back} hours...")
-        current_app.logger.debug(f"Graph API URL: {url}")
-        current_app.logger.debug(f"Filter params: {params}")
+        if user_principal_name:
+            current_app.logger.info(f"Filtering for user: {user_principal_name}")
+        current_app.logger.info(f"Graph API filter: {params['$filter']}")
         
         result = self._make_request(url, params)
         if result and 'value' in result:
@@ -227,6 +243,89 @@ class GraphClient:
             return result
         
         return None
+    
+    def fetch_groups(self, max_results=999):
+        """
+        Fetch all groups from Microsoft Entra.
+        
+        Args:
+            max_results: Maximum number of groups to fetch (default 999)
+        
+        Returns:
+            List of group objects with id, displayName, mail, etc.
+        """
+        url = "https://graph.microsoft.com/v1.0/groups"
+        params = {
+            '$select': 'id,displayName,mail,description,mailEnabled,securityEnabled,groupTypes',
+            '$top': max_results
+        }
+        
+        current_app.logger.info("Fetching groups from Entra ID...")
+        
+        result = self._make_request(url, params)
+        if result and 'value' in result:
+            groups = result['value']
+            current_app.logger.info(f"Fetched {len(groups)} groups")
+            return groups
+        
+        current_app.logger.warning("No groups retrieved")
+        return []
+    
+    def get_group_member_count(self, group_id):
+        """
+        Get the number of members in a group.
+        
+        Args:
+            group_id: Entra group ID
+        
+        Returns:
+            Integer count of members
+        """
+        url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members/$count"
+        headers = {
+            'ConsistencyLevel': 'eventual'
+        }
+        
+        try:
+            result = self._make_request(url, extra_headers=headers)
+            # The $count endpoint returns a plain integer, not JSON
+            if isinstance(result, int):
+                return result
+            # If it's a string, convert to int
+            if isinstance(result, str):
+                return int(result)
+            return 0
+        except Exception as e:
+            current_app.logger.warning(f"Failed to get member count for group {group_id}: {e}")
+            return 0
+    
+    def fetch_group_members(self, group_id):
+        """
+        Fetch all members of a specific group.
+        
+        Args:
+            group_id: Entra group ID
+        
+        Returns:
+            List of user objects (group members)
+        """
+        url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
+        params = {
+            '$select': 'id,userPrincipalName,displayName,mail,accountEnabled'
+        }
+        
+        current_app.logger.info(f"Fetching members for group {group_id}...")
+        
+        result = self._make_request(url, params)
+        if result and 'value' in result:
+            members = result['value']
+            # Filter to only users (not nested groups or other objects)
+            users = [m for m in members if m.get('@odata.type') == '#microsoft.graph.user' or 'userPrincipalName' in m]
+            current_app.logger.info(f"Group has {len(users)} user members")
+            return users
+        
+        current_app.logger.warning(f"Could not fetch members for group {group_id}")
+        return []
 
 
 # Global instance

@@ -14,6 +14,9 @@ False positives can occur due to:
 
 Use impossible travel as one signal in a broader risk assessment,
 not as automatic proof of account compromise.
+
+TRUSTED LOCATIONS: Remote workers who consistently log in from the same location
+(e.g., home office) will have that location learned as "trusted" to prevent false positives.
 """
 import math
 from datetime import datetime, timedelta
@@ -91,6 +94,10 @@ def detect_impossible_travel(previous_signin, current_signin):
     IMPORTANT: This is a risk indicator, not proof of compromise.
     See module docstring for common false positive causes.
     
+    TRUSTED LOCATIONS: If either the previous or current location is a trusted
+    baseline location for the user, travel alerts are suppressed to prevent
+    false positives for remote workers.
+    
     Args:
         previous_signin: EntraSignInEvent object for the previous successful sign-in
         current_signin: EntraSignInEvent object for the current sign-in
@@ -103,6 +110,7 @@ def detect_impossible_travel(previous_signin, current_signin):
             - hours_between: Float
             - required_speed_mph: Float
             - reason: String description or None
+            - suppressed_by_trusted: Boolean (True if trusted location prevented alert)
     """
     result = {
         'is_impossible': False,
@@ -110,7 +118,8 @@ def detect_impossible_travel(previous_signin, current_signin):
         'distance_miles': 0.0,
         'hours_between': 0.0,
         'required_speed_mph': 0.0,
-        'reason': None
+        'reason': None,
+        'suppressed_by_trusted': False
     }
     
     # If no previous sign-in, this can't be impossible travel
@@ -159,6 +168,39 @@ def detect_impossible_travel(previous_signin, current_signin):
     # Calculate required travel speed in mph
     required_speed = distance / hours_between
     result['required_speed_mph'] = round(required_speed, 2)
+    
+    # Check if either location is a trusted baseline for this user
+    # This prevents false positives for remote workers
+    if required_speed > 500:  # Only check trusted locations if it would be flagged
+        try:
+            from app.trusted_locations import is_location_trusted
+            
+            # Check if current location is trusted
+            current_is_trusted = is_location_trusted(
+                current_signin.entra_user_id,
+                curr_lat,
+                curr_lon
+            )
+            
+            # Check if previous location is trusted
+            previous_is_trusted = is_location_trusted(
+                previous_signin.entra_user_id,
+                prev_lat,
+                prev_lon
+            )
+            
+            if current_is_trusted or previous_is_trusted:
+                result['suppressed_by_trusted'] = True
+                location_name = current_signin.city or current_signin.country or 'location'
+                current_app.logger.info(
+                    f"Impossible travel suppressed for {current_signin.user_principal_name}: "
+                    f"{location_name} is a trusted baseline location "
+                    f"({distance:.0f} miles, {required_speed:.0f} mph)"
+                )
+                return result  # Don't flag as impossible travel
+        except Exception as e:
+            current_app.logger.error(f"Error checking trusted locations: {e}")
+            # Continue with normal detection if trusted location check fails
     
     # Threshold for impossible travel: 500 mph
     # (Commercial aircraft cruise at ~550 mph, but accounting for airport access,

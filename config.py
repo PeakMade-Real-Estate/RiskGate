@@ -98,6 +98,41 @@ class Config:
     # MFA correlation settings
     MFA_CORRELATION_LOOKBACK_MINUTES = 60  # Correlate MFA changes within this window after risky sign-in
     MFA_TAKEOVER_DETECTION_HOURS = 24      # Look for add-then-remove patterns within this window
+    
+    # Group filtering - exclude groups with these patterns (case-insensitive)
+    # This filters out noise while keeping main department groups
+    EXCLUDED_GROUP_PATTERNS = [
+        'test', 'testing', 'temp', 'temporary',
+        'old', 'archive', 'archived', 'legacy',
+        'project-', 'proj-', 'demo',
+        'sandbox', 'training', 'sample',
+        'backup', 'deleted', 'inactive',
+        'checklist', 'task list', 'mentor',
+        'replica', 'dynamic', 'townhome', 'village',
+        'campus', 'region', 'farmhouse', 'commons'
+    ]
+    
+    # Department keyword filter - only show groups containing these words
+    # Set to None to disable keyword filtering
+    DEPARTMENT_KEYWORDS = [
+        'technology', 'tech', 'it',
+        'accounting', 'finance',
+        'development', 'dev',
+        'pops', 'operations',
+        'transitions', 'transition team',
+        'hr', 'human resources',
+        'legal', 'marketing',
+        'sales', 'management'
+    ]
+    
+    # Additional filter: exclude groups with dashes (often property/project specific)
+    EXCLUDE_GROUPS_WITH_DASHES = True
+    
+    # Trusted location learning - prevents false positives for remote workers
+    TRUSTED_LOCATION_MIN_LOGINS = 3        # Number of successful logins needed to trust a location
+    TRUSTED_LOCATION_RADIUS_MILES = 50     # Locations within this radius are considered "same location"
+    TRUSTED_LOCATION_LEARNING_DAYS = 30    # Learn locations from logins in the last N days
+    
     MFA_TRUST_PERIOD_HOURS = 24            # Trust device after MFA validation for this period
     HIGH_PRIVILEGE_RISK_THRESHOLD = 30
     HIGH_PRIVILEGE_ROLES = ['admin', 'finance', 'security']  # Roles requiring stricter security

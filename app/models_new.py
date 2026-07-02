@@ -32,6 +32,8 @@ class UserIdentity(db.Model):
     security_alerts = db.relationship('EntraSecurityAlert', backref='user', lazy='dynamic')
     auth_methods = db.relationship('UserAuthMethodSnapshot', backref='user', lazy='dynamic')
     risk_state = db.relationship('UserRiskState', backref='user', uselist=False)
+    trusted_locations = db.relationship('UserTrustedLocation', backref='user', lazy='dynamic')
+    trusted_locations = db.relationship('UserTrustedLocation', backref='user', lazy='dynamic')
     
     def __repr__(self):
         return f'<UserIdentity {self.user_principal_name}>'
@@ -161,6 +163,39 @@ class UserAuthMethodSnapshot(db.Model):
     
     def __repr__(self):
         return f'<UserAuthMethodSnapshot {self.method_type} for {self.user_principal_name}>'
+
+
+class UserTrustedLocation(db.Model):
+    """
+    Tracks baseline/trusted locations for each user.
+    Used to prevent false positives for remote workers who consistently log in from home.
+    
+    A location becomes \"trusted\" after a user successfully logs in from it multiple times.
+    """
+    __tablename__ = 'user_trusted_location'
+    __table_args__ = {'extend_existing': True}
+    
+    id = db.Column(db.Integer, primary_key=True)
+    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
+    user_principal_name = db.Column(db.String(255), nullable=False, index=True)
+    
+    # Location data (approximate - within ~50 miles)
+    country = db.Column(db.String(100), nullable=False, index=True)
+    city = db.Column(db.String(100))
+    latitude = db.Column(db.Float, nullable=False)
+    longitude = db.Column(db.Float, nullable=False)
+    
+    # Learning metrics
+    login_count = db.Column(db.Integer, default=1)  # Number of successful logins from this location
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    is_trusted = db.Column(db.Boolean, default=False, index=True)  # True when login_count reaches threshold
+    
+    # Location metadata
+    location_name = db.Column(db.String(255))  # e.g., \"Seattle, WA, US\" for display
+    
+    def __repr__(self):
+        return f'<UserTrustedLocation {self.user_principal_name} @ {self.location_name} ({self.login_count} logins)>'
 
 
 class UserRiskState(db.Model):
