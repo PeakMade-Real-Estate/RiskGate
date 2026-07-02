@@ -59,7 +59,7 @@ def root():
 @bp.route('/securityscan-dashboard', methods=['GET'])
 def securityscan_dashboard():
     """
-    Main SecurityScan Dashboard.
+    Main SecurityScan page.
     """
     return root()
 
