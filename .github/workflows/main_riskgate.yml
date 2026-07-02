@@ -32,7 +32,7 @@ jobs:
         run: zip -r release.zip . -x ".git/*" ".github/*" "azure_logs/*" "__pycache__/*" "*.pyc" ".venv/*" "venv/*" ".env"
 
       - name: Upload artifact for deployment jobs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: python-app
           path: release.zip
@@ -46,7 +46,7 @@ jobs:
     
     steps:
       - name: Download artifact from build job
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: python-app
 
