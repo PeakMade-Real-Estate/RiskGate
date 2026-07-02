@@ -60,4 +60,3 @@ jobs:
           app-name: 'RiskGate'
           slot-name: 'Production'
           publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_RISKGATE }}
-          startup-command: 'gunicorn --bind=0.0.0.0 --timeout 600 run:app'
