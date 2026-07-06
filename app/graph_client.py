@@ -71,6 +71,16 @@ class GraphClient:
             current_app.logger.info("Successfully obtained Microsoft Graph access token")
             return self.access_token
             
+        except requests.exceptions.HTTPError as e:
+            # Get detailed error from Microsoft
+            error_detail = "No details"
+            try:
+                error_detail = response.json()
+            except:
+                error_detail = response.text
+            current_app.logger.error(f"Failed to obtain access token: {e}")
+            current_app.logger.error(f"Microsoft error response: {error_detail}")
+            return None
         except Exception as e:
             current_app.logger.error(f"Failed to obtain access token: {e}")
             return None

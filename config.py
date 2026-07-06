@@ -63,10 +63,10 @@ class Config:
     
     PRODUCTION_URL = 'https://securityscan-e6f4c2gac0a3bjfr.eastus-01.azurewebsites.net'
     
-    # MSAL Authentication configuration
-    MSAL_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}"
-    MSAL_REDIRECT_PATH = "/auth/callback"  # Must match Azure App Registration
-    MSAL_SCOPE = ["User.Read"]  # Basic user profile scope
+    # MSAL Authentication configuration (DISABLED - not currently used)
+    # MSAL_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}"
+    # MSAL_REDIRECT_PATH = "/auth/callback"  # Must match Azure App Registration
+    # MSAL_SCOPE = ["User.Read"]  # Basic user profile scope
     
     # Data ingestion settings
     SIGNIN_LOGS_HOURS_BACK = 24  # How many hours of sign-in logs to fetch
