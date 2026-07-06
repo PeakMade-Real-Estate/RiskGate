@@ -6,27 +6,6 @@
 {% block content %}
 <div class="container-fluid py-2">
     
-    <!-- Data Mode Indicator Banner -->
-    {% if using_mock %}
-    <div class="alert alert-warning py-2 mb-2" style="border-left: 4px solid #ff9800;">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-flask me-2" style="font-size: 1.2rem;"></i>
-            <div>
-                <strong>MOCK DATA MODE</strong> - Using test data with impossible travel scenarios for testing detection algorithms
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <div class="alert alert-success py-2 mb-2" style="border-left: 4px solid #28a745;">
-        <div class="d-flex align-items-center">
-            <i class="fas fa-cloud me-2" style="font-size: 1.2rem;"></i>
-            <div>
-                <strong>REAL DATA MODE</strong> - Querying Microsoft Entra ID for actual sign-in logs
-            </div>
-        </div>
-    </div>
-    {% endif %}
-    
     <!-- Results Section -->
     <div class="card mb-2 shadow-sm">
         <div class="card-body p-2">
