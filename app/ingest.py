@@ -97,6 +97,7 @@ def ingest_signin_event(signin_record):
         # Extract location
         location = signin_record.get('location', {}) or {}
         city = location.get('city')
+        state = location.get('state')
         country = location.get('countryOrRegion')
         geo_coordinates = location.get('geoCoordinates', {}) or {}
         latitude = geo_coordinates.get('latitude')
@@ -138,6 +139,7 @@ def ingest_signin_event(signin_record):
             created_at=created_at,
             ip_address=ip_address,
             country=country,
+            state=state,
             city=city,
             latitude=latitude,
             longitude=longitude,

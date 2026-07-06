@@ -134,19 +134,31 @@ def detect_impossible_travel(previous_signin, current_signin):
     if required_speed > extreme_threshold:
         result['is_extreme'] = True
         result['is_impossible'] = True
+        
+        prev_state = getattr(previous_signin, 'state', None) or ''
+        curr_state = getattr(current_signin, 'state', None) or ''
+        prev_loc = f"{previous_signin.city or 'Unknown'}, {prev_state}, {previous_signin.country or 'Unknown'}" if prev_state else f"{previous_signin.city or 'Unknown'}, {previous_signin.country or 'Unknown'}"
+        curr_loc = f"{current_signin.city or 'Unknown'}, {curr_state}, {current_signin.country or 'Unknown'}" if curr_state else f"{current_signin.city or 'Unknown'}, {current_signin.country or 'Unknown'}"
+        
         result['reason'] = (
             f"Extreme impossible travel: {round(required_speed)} mph required "
             f"to travel {round(distance)} miles in {round(hours_between, 1)} hours. "
-            f"From {previous_signin.city or 'Unknown'}, {previous_signin.country or 'Unknown'} "
-            f"to {current_signin.city or 'Unknown'}, {current_signin.country or 'Unknown'}."
+            f"From {prev_loc} "
+            f"to {curr_loc}."
         )
     elif required_speed > impossible_threshold:
         result['is_impossible'] = True
+        
+        prev_state = getattr(previous_signin, 'state', None) or ''
+        curr_state = getattr(current_signin, 'state', None) or ''
+        prev_loc = f"{previous_signin.city or 'Unknown'}, {prev_state}, {previous_signin.country or 'Unknown'}" if prev_state else f"{previous_signin.city or 'Unknown'}, {previous_signin.country or 'Unknown'}"
+        curr_loc = f"{current_signin.city or 'Unknown'}, {curr_state}, {current_signin.country or 'Unknown'}" if curr_state else f"{current_signin.city or 'Unknown'}, {current_signin.country or 'Unknown'}"
+        
         result['reason'] = (
             f"Impossible travel: {round(required_speed)} mph required "
             f"to travel {round(distance)} miles in {round(hours_between, 1)} hours. "
-            f"From {previous_signin.city or 'Unknown'}, {previous_signin.country or 'Unknown'} "
-            f"to {current_signin.city or 'Unknown'}, {current_signin.country or 'Unknown'}."
+            f"From {prev_loc} "
+            f"to {curr_loc}."
         )
     
     return result

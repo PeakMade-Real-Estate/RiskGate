@@ -170,7 +170,9 @@ def correlate_mfa_change_after_risky_signin(mfa_event):
     reason_parts.append(f"MFA/authentication method change detected {int(minutes_between)} minutes after a risky sign-in.")
     reason_parts.append(f"\nRisky sign-in details:")
     reason_parts.append(f"- Time: {risky_signin.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}")
-    reason_parts.append(f"- Location: {risky_signin.city or 'Unknown'}, {risky_signin.country or 'Unknown'}")
+    state = getattr(risky_signin, 'state', None) or ''
+    location_str = f"{risky_signin.city or 'Unknown'}, {state}, {risky_signin.country or 'Unknown'}" if state else f"{risky_signin.city or 'Unknown'}, {risky_signin.country or 'Unknown'}"
+    reason_parts.append(f"- Location: {location_str}")
     reason_parts.append(f"- IP: {risky_signin.ip_address or 'Unknown'}")
     reason_parts.append(f"- Risk Score: {risky_signin.local_risk_score} ({risky_signin.local_risk_level})")
     reason_parts.append(f"- Risk Reasons: {', '.join(risk_reasons)}")
@@ -320,10 +322,13 @@ def detect_tap_after_risk(entra_user_id, tap_event):
     time_delta = tap_event.created_at - risky_signin.created_at
     hours_between = time_delta.total_seconds() / 3600
     
+    state = getattr(risky_signin, 'state', None) or ''
+    location_str = f"{risky_signin.city}, {state}, {risky_signin.country}" if state else f"{risky_signin.city}, {risky_signin.country}"
+    
     reason = (
         f"Temporary Access Pass created {round(hours_between, 1)} hours after a risky sign-in.\n\n"
         f"Risky sign-in: {risky_signin.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
-        f"Location: {risky_signin.city}, {risky_signin.country}\n"
+        f"Location: {location_str}\n"
         f"Risk Score: {risky_signin.local_risk_score}\n\n"
         f"TAP created: {tap_event.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
         f"Created by: {tap_event.initiated_by}\n\n"

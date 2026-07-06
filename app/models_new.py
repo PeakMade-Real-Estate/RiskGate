@@ -58,6 +58,7 @@ class EntraSignInEvent(db.Model):
     # Location data
     ip_address = db.Column(db.String(50))
     country = db.Column(db.String(100), index=True)
+    state = db.Column(db.String(100))
     city = db.Column(db.String(100))
     latitude = db.Column(db.Float)
     longitude = db.Column(db.Float)

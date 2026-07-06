@@ -11,9 +11,11 @@ from app.models_new import UserTrustedLocation, EntraSignInEvent
 from app.risk_detection import distance_miles
 
 
-def get_location_name(country, city):
+def get_location_name(country, city, state=None):
     """Format a readable location name."""
     if city:
+        if state:
+            return f"{city}, {state}, {country}"
         return f"{city}, {country}"
     return country
 
@@ -111,7 +113,8 @@ def update_trusted_location(signin_event):
         # Create new location
         location_name = get_location_name(
             signin_event.country or 'Unknown',
-            signin_event.city
+            signin_event.city,
+            getattr(signin_event, 'state', None)
         )
         
         location = UserTrustedLocation(

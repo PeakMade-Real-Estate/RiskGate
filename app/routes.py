@@ -408,6 +408,7 @@ def scan_entra():
             location = login.get('location', {})
             device = login.get('deviceDetail', {})
             city = location.get('city', 'Unknown')
+            state = location.get('state', '')
             country = location.get('countryOrRegion', 'Unknown')
             
             # Get calculated risk metrics
@@ -435,7 +436,7 @@ def scan_entra():
                 'finding': finding,
                 'risk_level': risk_level,
                 'travel_type': travel_type,
-                'location': f"{city}, {country}",
+                'location': f"{city}, {state}, {country}" if state else f"{city}, {country}",
                 'previous_location': prev_location,
                 'distance_miles': distance,
                 'time_between_hours': time_between,
@@ -457,10 +458,14 @@ def scan_entra():
         for log in user_logs:
             location = log.get('location', {})
             device = log.get('deviceDetail', {})
+            city = location.get('city', 'Unknown')
+            state = location.get('state', '')
+            country = location.get('countryOrRegion', 'Unknown')
+            location_str = f"{city}, {state}, {country}" if state else f"{city}, {country}"
             formatted_signin_logs.append({
                 'time': log.get('createdDateTime', 'N/A')[:19].replace('T', ' '),
                 'user': log.get('userPrincipalName', 'N/A'),
-                'location': f"{location.get('city', 'Unknown')}, {location.get('countryOrRegion', 'Unknown')}",
+                'location': location_str,
                 'device': f"{device.get('operatingSystem', 'Unknown')} / {device.get('browser', 'Unknown')}",
                 'ip_address': log.get('ipAddress', 'N/A'),
                 'app': log.get('appDisplayName', 'N/A'),
@@ -657,7 +662,10 @@ def analyze_impossible_travel(signin_logs):
             current['required_speed_mph'] = round(required_speed_mph, 1)
             current['risk_level'] = risk_level
             current['travel_type'] = travel_type
-            current['previous_location'] = f"{previous_loc.get('city', 'Unknown')}, {previous_loc.get('countryOrRegion', 'Unknown')}"
+            prev_city = previous_loc.get('city', 'Unknown')
+            prev_state = previous_loc.get('state', '')
+            prev_country = previous_loc.get('countryOrRegion', 'Unknown')
+            current['previous_location'] = f"{prev_city}, {prev_state}, {prev_country}" if prev_state else f"{prev_city}, {prev_country}"
             impossible.append(current)
     
     return impossible

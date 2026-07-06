@@ -76,9 +76,14 @@ def create_impossible_login_alert(signin_event, travel_details):
         severity = 'high'
         alert_type = 'impossible_login'
     
+    city = signin_event.city or 'Unknown'
+    state = getattr(signin_event, 'state', None) or ''
+    country = signin_event.country or 'Unknown'
+    location_str = f"{city}, {state}, {country}" if state else f"{city}, {country}"
+    
     reason = (
         f"Impossible travel detected:\n\n"
-        f"User signed in from {signin_event.city or 'Unknown'}, {signin_event.country or 'Unknown'} "
+        f"User signed in from {location_str} "
         f"at {signin_event.created_at.strftime('%Y-%m-%d %H:%M:%S UTC')}.\n\n"
         f"Required travel speed: {travel_details['required_speed_mph']} mph\n"
         f"Distance: {travel_details['distance_miles']} miles\n"

@@ -78,12 +78,17 @@ def after_login_attempt(user, success, additional_data=None):
                 alert_type = 'impossible_travel'
             
             # Create security alert
+            prev_state = getattr(previous_login, 'state', None) or ''
+            curr_state = getattr(login_event, 'state', None) or ''
+            prev_loc = f"{previous_login.city}, {prev_state}, {previous_login.country}" if prev_state else f"{previous_login.city}, {previous_login.country}"
+            curr_loc = f"{login_event.city}, {curr_state}, {login_event.country}" if curr_state else f"{login_event.city}, {login_event.country}"
+            
             alert_reason = (
                 f"Impossible travel detected: {travel_analysis['distance_miles']:.0f} miles "
                 f"in {travel_analysis['hours_between']:.1f} hours "
                 f"(requires {travel_analysis['required_speed']:.0f} mph). "
-                f"Previous: {previous_login.city}, {previous_login.country}. "
-                f"Current: {login_event.city}, {login_event.country}."
+                f"Previous: {prev_loc}. "
+                f"Current: {curr_loc}."
             )
             
             create_security_alert(
