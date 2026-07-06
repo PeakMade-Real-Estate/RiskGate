@@ -331,25 +331,47 @@ def scan_entra():
             # Fetch sign-in logs for each target user
             current_app.logger.info(f"Scanning Entra ID for {len(target_users)} user(s)...")
             
+            api_failures = []
+            users_with_activity = []
+            users_without_activity = []
+            
             for user in target_users:
                 try:
                     logs = graph_client.fetch_signin_logs(hours_back=24, max_results=1000, user_principal_name=user)
-                    if logs:
+                    
+                    if logs is None:
+                        # API call failed
+                        api_failures.append(user)
+                        current_app.logger.error(f"API call failed for {user}")
+                    elif len(logs) > 0:
+                        # User has activity
                         all_signin_logs.extend(logs)
+                        users_with_activity.append(user)
                         current_app.logger.info(f"Retrieved {len(logs)} sign-in logs for {user}")
                     else:
-                        current_app.logger.info(f"No logs found for {user}")
+                        # User has no activity (empty list is valid)
+                        users_without_activity.append(user)
+                        current_app.logger.info(f"No sign-in activity for {user} in last 24 hours")
+                        
                 except Exception as e:
+                    api_failures.append(user)
                     current_app.logger.error(f"Error fetching logs for {user}: {e}")
                     continue
             
-            if not all_signin_logs:
-                # No data from API
-                current_app.logger.warning("No data returned from Graph API for any user")
-                flash(f'⚠️ No sign-in logs returned from Microsoft Graph API. Check permissions and retry.', 'warning')
+            # Only error if ALL users had API failures
+            if api_failures and not all_signin_logs and not users_without_activity:
+                current_app.logger.error(f"Graph API failed for all users: {api_failures}")
+                flash(f'⚠️ Microsoft Graph API failed. Check permissions and retry.', 'warning')
                 return redirect(url_for('main.root'))
             
-            current_app.logger.info(f"Retrieved {len(all_signin_logs)} total sign-in logs for {len(target_users)} users")
+            # Log summary
+            current_app.logger.info(f"Scan complete: {len(users_with_activity)} users with activity, "
+                                  f"{len(users_without_activity)} users without activity, "
+                                  f"{len(api_failures)} API failures")
+            
+            if users_without_activity:
+                current_app.logger.info(f"Users with no sign-ins: {', '.join(users_without_activity)}")
+            
             user_logs = all_signin_logs
         
         # Analyze for impossible travel with smart baseline detection
@@ -365,7 +387,10 @@ def scan_entra():
         
         # Check for MFA changes after impossible travel (critical alert escalation)
         try:
-            audit_logs = graph_client.fetch_audit_logs(hours_back=168) if not use_mock_data else []
+            if not use_mock_data:
+                audit_logs = graph_client.fetch_audit_logs(hours_back=168)
+            else:
+                audit_logs = []
             mfa_change_times = set()
             if audit_logs:
                 for audit in audit_logs:
