@@ -97,30 +97,22 @@ def get_groups():
             display_name = g.get('displayName', 'Unknown')
             display_lower = display_name.lower()
             
-            # Filter for active groups only (used since configured cutoff year)
+            # Filter for active groups only - applies to M365 groups with renewedDateTime
+            # Distribution lists don't have renewedDateTime, so we include all of them
             from datetime import datetime
             renewed_date = g.get('renewedDateTime')
-            created_date = g.get('createdDateTime')
+            group_types = g.get('groupTypes', [])
+            is_m365_group = 'Unified' in group_types if group_types else False
             
-            # Get cutoff year from config (default 2025)
-            cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
-            cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
-            is_active = False
-            
-            if renewed_date:
-                # For M365 groups, check renewedDateTime (indicates ongoing activity)
+            # Only filter M365 groups by activity date
+            if is_m365_group and renewed_date:
+                cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
+                cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
                 renewed_dt = datetime.fromisoformat(renewed_date.replace('Z', '+00:00')).replace(tzinfo=None)
-                if renewed_dt >= cutoff_date:
-                    is_active = True
-            elif created_date:
-                # For distribution lists, check if created after cutoff
-                created_dt = datetime.fromisoformat(created_date.replace('Z', '+00:00')).replace(tzinfo=None)
-                if created_dt >= cutoff_date:
-                    is_active = True
-            
-            if not is_active:
-                current_app.logger.debug(f"Excluding inactive group: {display_name} (last activity before {cutoff_year})")
-                continue
+                
+                if renewed_dt < cutoff_date:
+                    current_app.logger.debug(f"Excluding inactive M365 group: {display_name} (last renewed before {cutoff_year})")
+                    continue
             
             # Exclude groups matching noise patterns (test, temp, archive, etc.)
             if any(pattern in display_lower for pattern in excluded_patterns):
@@ -312,7 +304,7 @@ def scan_entra():
                     current_app.logger.info(f"Searching for group by name: {target_value}")
                     all_groups = graph_client.fetch_groups(max_results=999)
                     
-                    # Filter for active groups only (same logic as get-groups endpoint)
+                    # Filter for active M365 groups only, include all distribution lists
                     from datetime import datetime
                     cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
                     cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
@@ -322,22 +314,18 @@ def scan_entra():
                         if target_value.lower() not in g.get('displayName', '').lower():
                             continue
                         
-                        # Check if group is active
+                        # Check if group is active (only filter M365 groups by date)
+                        group_types = g.get('groupTypes', [])
+                        is_m365_group = 'Unified' in group_types if group_types else False
                         renewed_date = g.get('renewedDateTime')
-                        created_date = g.get('createdDateTime')
-                        is_active = False
                         
-                        if renewed_date:
+                        if is_m365_group and renewed_date:
                             renewed_dt = datetime.fromisoformat(renewed_date.replace('Z', '+00:00')).replace(tzinfo=None)
-                            if renewed_dt >= cutoff_date:
-                                is_active = True
-                        elif created_date:
-                            created_dt = datetime.fromisoformat(created_date.replace('Z', '+00:00')).replace(tzinfo=None)
-                            if created_dt >= cutoff_date:
-                                is_active = True
+                            if renewed_dt < cutoff_date:
+                                continue  # Skip old M365 groups
                         
-                        if is_active:
-                            matching_groups.append(g)
+                        # Include distribution lists and active M365 groups
+                        matching_groups.append(g)
                     
                     if not matching_groups:
                         flash(f'⚠️ No group found matching "{target_value}"', 'warning')
