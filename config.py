@@ -103,6 +103,7 @@ class Config:
     
     # Group filtering - exclude groups with these patterns (case-insensitive)
     # This filters out noise while keeping main department groups
+    GROUP_ACTIVITY_CUTOFF_YEAR = 2025  # Only show groups active since this year
     EXCLUDED_GROUP_PATTERNS = [
         'test', 'testing', 'temp', 'temporary',
         'old', 'archive', 'archived', 'legacy',

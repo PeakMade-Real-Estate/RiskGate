@@ -97,6 +97,31 @@ def get_groups():
             display_name = g.get('displayName', 'Unknown')
             display_lower = display_name.lower()
             
+            # Filter for active groups only (used since configured cutoff year)
+            from datetime import datetime
+            renewed_date = g.get('renewedDateTime')
+            created_date = g.get('createdDateTime')
+            
+            # Get cutoff year from config (default 2025)
+            cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
+            cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
+            is_active = False
+            
+            if renewed_date:
+                # For M365 groups, check renewedDateTime (indicates ongoing activity)
+                renewed_dt = datetime.fromisoformat(renewed_date.replace('Z', '+00:00')).replace(tzinfo=None)
+                if renewed_dt >= cutoff_date:
+                    is_active = True
+            elif created_date:
+                # For distribution lists, check if created after cutoff
+                created_dt = datetime.fromisoformat(created_date.replace('Z', '+00:00')).replace(tzinfo=None)
+                if created_dt >= cutoff_date:
+                    is_active = True
+            
+            if not is_active:
+                current_app.logger.debug(f"Excluding inactive group: {display_name} (last activity before {cutoff_year})")
+                continue
+            
             # Exclude groups matching noise patterns (test, temp, archive, etc.)
             if any(pattern in display_lower for pattern in excluded_patterns):
                 continue
@@ -233,6 +258,16 @@ def scan_entra():
     - TESTING_MODE=true in .env
     - Graph API returns permission errors
     """
+    # Clear previous scan results immediately before starting new scan
+    scan_results['signin_logs'] = []
+    scan_results['impossible_logins'] = []
+    scan_results['scanned_users'] = []
+    scan_results['users_with_activity'] = []
+    scan_results['users_without_activity'] = []
+    scan_results['alerts'] = []
+    scan_results['formatted_signin_logs'] = []
+    scan_results['last_scan'] = None
+    
     # Get scan targets from form
     scan_type = request.form.get('scan_type', 'user')  # 'user' or 'group'
     default_user = get_mock_users()[0]['userPrincipalName'] if session.get('use_mock_data', False) else ''
@@ -276,7 +311,33 @@ def scan_entra():
                     # Not a GUID - search for group by name
                     current_app.logger.info(f"Searching for group by name: {target_value}")
                     all_groups = graph_client.fetch_groups(max_results=999)
-                    matching_groups = [g for g in all_groups if target_value.lower() in g.get('displayName', '').lower()]
+                    
+                    # Filter for active groups only (same logic as get-groups endpoint)
+                    from datetime import datetime
+                    cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
+                    cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
+                    
+                    matching_groups = []
+                    for g in all_groups:
+                        if target_value.lower() not in g.get('displayName', '').lower():
+                            continue
+                        
+                        # Check if group is active
+                        renewed_date = g.get('renewedDateTime')
+                        created_date = g.get('createdDateTime')
+                        is_active = False
+                        
+                        if renewed_date:
+                            renewed_dt = datetime.fromisoformat(renewed_date.replace('Z', '+00:00')).replace(tzinfo=None)
+                            if renewed_dt >= cutoff_date:
+                                is_active = True
+                        elif created_date:
+                            created_dt = datetime.fromisoformat(created_date.replace('Z', '+00:00')).replace(tzinfo=None)
+                            if created_dt >= cutoff_date:
+                                is_active = True
+                        
+                        if is_active:
+                            matching_groups.append(g)
                     
                     if not matching_groups:
                         flash(f'⚠️ No group found matching "{target_value}"', 'warning')

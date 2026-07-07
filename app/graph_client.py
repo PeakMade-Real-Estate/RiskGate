@@ -266,7 +266,7 @@ class GraphClient:
         """
         url = "https://graph.microsoft.com/v1.0/groups"
         params = {
-            '$select': 'id,displayName,mail,description,mailEnabled,securityEnabled,groupTypes',
+            '$select': 'id,displayName,mail,description,mailEnabled,securityEnabled,groupTypes,createdDateTime,renewedDateTime',
             '$top': max_results
         }
         
