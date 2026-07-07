@@ -311,22 +311,40 @@ Tracks devices explicitly trusted by users.
    pip install -r requirements.txt
    ```
 
-4. **Initialize the database**
+4. **Configure environment variables**
+   
+   Copy `.env.example` to `.env` and configure required values:
    ```bash
-   flask db init
-   flask db migrate -m "Initial migration"
+   cp .env.example .env
+   ```
+   
+   **Required variables (for production with Microsoft Entra ID):**
+   - `AZURE_TENANT_ID` - Your Azure tenant ID
+   - `AZURE_CLIENT_ID` - Your Azure app registration client ID
+   - `AZURE_CLIENT_SECRET` - Your Azure app registration client secret
+   
+   **Optional variables:**
+   - `PORT` - Application port (default: 5003)
+   - `DATABASE_URL` - Database connection string (default: SQLite)
+   - `PRODUCTION_URL` - Production URL for Azure deployment
+   - `TESTING_MODE` - Set to `true` for local testing without Azure (default: false)
+   - `SECRET_KEY` - Flask session secret key
+
+5. **Initialize the database**
+   ```bash
    flask db upgrade
    ```
 
-5. **Run the application**
+6. **Run the application**
    ```bash
    python run.py
    ```
 
-6. **Open your browser**
+7. **Open your browser**
    ```
-   http://localhost:5000
+   https://127.0.0.1:5003
    ```
+   (Or use the port you configured in the `PORT` environment variable)
 
 ---
 

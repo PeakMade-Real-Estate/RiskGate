@@ -48,8 +48,8 @@ class Config:
     # SESSION_COOKIE_SECURE set dynamically below based on environment
     
     # Microsoft Graph API configuration
-    AZURE_TENANT_ID = os.environ.get('AZURE_TENANT_ID', 'ea0cd29c-45e6-4ad1-94ff-2e9f36fb84b5')
-    AZURE_CLIENT_ID = os.environ.get('AZURE_CLIENT_ID', '99b0438f-6b8c-41ff-86ee-0116481883ea')
+    AZURE_TENANT_ID = os.environ.get('AZURE_TENANT_ID')
+    AZURE_CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
     AZURE_CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
     
     # Application URL (auto-detect local vs production)
@@ -58,10 +58,12 @@ class Config:
         APP_URL = f"https://{WEBSITE_HOSTNAME}"
         SESSION_COOKIE_SECURE = True  # Require HTTPS for cookies in production
     else:
-        APP_URL = 'https://127.0.0.1:5003'  # Local development with self-signed cert
+        # Local development - port from environment or default to 5003
+        port = os.environ.get('PORT', '5003')
+        APP_URL = f'https://127.0.0.1:{port}'
         SESSION_COOKIE_SECURE = True
     
-    PRODUCTION_URL = 'https://securityscan-e6f4c2gac0a3bjfr.eastus-01.azurewebsites.net'
+    PRODUCTION_URL = os.environ.get('PRODUCTION_URL', '')
     
     # MSAL Authentication configuration (DISABLED - not currently used)
     # MSAL_AUTHORITY = f"https://login.microsoftonline.com/{AZURE_TENANT_ID}"
