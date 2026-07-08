@@ -664,8 +664,27 @@ def analyze_impossible_travel(signin_logs):
         # Calculate required speed
         required_speed_mph = distance_miles / time_diff_hours
         
-        # Check if either location is a trusted baseline for this user
+        # Check if same device was used (device-based trust)
+        # If the same physical device made both logins, it's likely the same person traveling
+        curr_device = current.get('deviceDetail', {})
+        prev_device = previous.get('deviceDetail', {})
+        curr_device_id = curr_device.get('deviceId')
+        prev_device_id = prev_device.get('deviceId')
+        
         user = current.get('userPrincipalName', '')
+        
+        if curr_device_id and prev_device_id and curr_device_id == prev_device_id:
+            # Same device - suppress alert (legitimate travel with their device)
+            curr_city = current_loc.get('city', 'Unknown')
+            prev_city = previous_loc.get('city', 'Unknown')
+            device_name = f"{curr_device.get('operatingSystem', 'Unknown')} - {curr_device.get('browser', 'Unknown')}"
+            current_app.logger.info(
+                f"Suppressed travel alert for {user}: Same device used in both locations "
+                f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, device: {device_name})"
+            )
+            continue  # Skip flagging this as impossible travel
+        
+        # Check if either location is a trusted baseline for this user
         curr_rounded = (round(curr_lat, 1), round(curr_lon, 1))
         prev_rounded = (round(prev_lat, 1), round(prev_lon, 1))
         

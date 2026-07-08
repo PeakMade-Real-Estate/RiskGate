@@ -122,10 +122,15 @@ def generate_mock_signin_logs(target_user, days_back=7):
     current_time = datetime.utcnow()
     user_id = _generate_user_id(target_user)
     
+    # Generate consistent device IDs per user (simulating their regular devices)
+    primary_device_id = f'device-{hash(target_user) % 10000:04d}'  # e.g., device-1234
+    mobile_device_id = f'mobile-{hash(target_user) % 10000:04d}'   # e.g., mobile-1234
+    
     # Generate normal sign-ins
     for i in range(15):
         timestamp = current_time - timedelta(hours=random.randint(1, days_back * 24))
         location = random.choice(locations[:3])  # Mostly US locations
+        device_id = primary_device_id if i % 3 != 0 else mobile_device_id  # Mostly primary device
         
         log = {
             'id': f'mock-signin-{target_user}-{i}',
@@ -135,6 +140,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
             'appDisplayName': random.choice(apps),
             'clientAppUsed': 'Browser',
             'deviceDetail': {
+                'deviceId': device_id,
                 'browser': random.choice(browsers),
                 'operatingSystem': 'Windows 11'
             },
@@ -161,6 +167,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
     
     # Add IMPOSSIBLE TRAVEL scenarios (different countries within 2 hours)
     # Scenario 1: Seattle -> Tokyo (1 hour apart - impossible!)
+    # DIFFERENT devices = likely compromise (should trigger alert)
     impossible_time_1 = current_time - timedelta(hours=5)
     logs.append({
         'id': f'mock-signin-impossible-1-{target_user}',
@@ -170,6 +177,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
         'appDisplayName': 'Office 365',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
+            'deviceId': primary_device_id,  # User's regular device
             'browser': 'Chrome 119.0',
             'operatingSystem': 'Windows 11'
         },
@@ -190,6 +198,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
         'appDisplayName': 'Azure Portal',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
+            'deviceId': 'compromised-device-9999',  # DIFFERENT device = suspicious!
             'browser': 'Chrome 119.0',
             'operatingSystem': 'Windows 11'
         },
@@ -203,6 +212,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
     })
     
     # Scenario 2: London -> Sydney (2 hours apart - impossible!)
+    # SAME device = legitimate travel (should be suppressed by device-based trust)
     impossible_time_2 = current_time - timedelta(hours=12)
     logs.append({
         'id': f'mock-signin-impossible-3-{target_user}',
@@ -212,6 +222,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
         'appDisplayName': 'Microsoft Teams',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
+            'deviceId': mobile_device_id,  # User's mobile device
             'browser': 'Edge 120.0',
             'operatingSystem': 'Windows 11'
         },
@@ -232,6 +243,7 @@ def generate_mock_signin_logs(target_user, days_back=7):
         'appDisplayName': 'SharePoint',
         'clientAppUsed': 'Browser',
         'deviceDetail': {
+            'deviceId': mobile_device_id,  # SAME device = legitimate travel with laptop
             'browser': 'Edge 120.0',
             'operatingSystem': 'Windows 11'
         },
