@@ -2,13 +2,30 @@
 Application routes - with Microsoft Graph API integration (in-memory storage).
 """
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import requests
 import os
 from app.graph_client import GraphClient
 from app.mock_data import generate_mock_signin_logs, get_mock_users, get_mock_groups, get_mock_group_members, MOCK_GROUPS
 
 bp = Blueprint('main', __name__)
+
+
+def convert_to_est(utc_timestamp_str):
+    """Convert UTC timestamp string to EST format."""
+    if not utc_timestamp_str or utc_timestamp_str == 'N/A':
+        return 'N/A'
+    try:
+        # Parse ISO format timestamp (2026-07-07T20:15:37Z)
+        from dateutil import parser
+        utc_time = parser.parse(utc_timestamp_str)
+        # Convert to EST (UTC-5)
+        est_time = utc_time.astimezone(timezone(timedelta(hours=-5)))
+        return est_time.strftime('%Y-%m-%d %I:%M:%S %p')
+    except:
+        # Fallback if parsing fails
+        return utc_timestamp_str[:19].replace('T', ' ')
+
 
 # In-memory storage for scan results
 scan_results = {
@@ -258,7 +275,7 @@ def scan_entra():
     scan_results['users_without_activity'] = []
     scan_results['alerts'] = []
     scan_results['formatted_signin_logs'] = []
-    scan_results['last_scan'] = None
+    scan_results['last_scan'] = None  # Clear timestamp on new scan
     
     # Get scan targets from form
     scan_type = request.form.get('scan_type', 'user')  # 'user' or 'group'
@@ -430,7 +447,10 @@ def scan_entra():
         # Store in memory
         scan_results['signin_logs'] = user_logs
         scan_results['impossible_logins'] = impossible_logins
-        scan_results['last_scan'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S UTC')
+        # Convert UTC to EST (UTC-5)
+        from datetime import timezone, timedelta as td
+        est_time = datetime.now(timezone(td(hours=-5)))
+        scan_results['last_scan'] = est_time.strftime('%Y-%m-%d %I:%M:%S %p EST')
         scan_results['using_mock_data'] = use_mock_data
         
         # Check for MFA changes after impossible travel (critical alert escalation)
@@ -489,7 +509,8 @@ def scan_entra():
                 finding = f'Impossible Travel ({risk_factors_display})'
             
             alerts.append({
-                'time': login.get('createdDateTime', 'N/A')[:19].replace('T', ' '),
+                # Convert timestamp to EST
+                'time': convert_to_est(login.get('createdDateTime', 'N/A')),
                 'user': login.get('userPrincipalName', 'N/A'),
                 'finding': finding,
                 'risk_level': risk_level,
@@ -521,7 +542,8 @@ def scan_entra():
             country = location.get('countryOrRegion', 'Unknown')
             location_str = f"{city}, {state}, {country}" if state else f"{city}, {country}"
             formatted_signin_logs.append({
-                'time': log.get('createdDateTime', 'N/A')[:19].replace('T', ' '),
+                # Convert timestamp to EST
+                'time': convert_to_est(log.get('createdDateTime', 'N/A')),
                 'user': log.get('userPrincipalName', 'N/A'),
                 'location': location_str,
                 'device': f"{device.get('operatingSystem', 'Unknown')} / {device.get('browser', 'Unknown')}",
