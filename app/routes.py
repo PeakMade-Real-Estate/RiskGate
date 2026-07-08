@@ -305,7 +305,6 @@ def scan_entra():
                     all_groups = graph_client.fetch_groups(max_results=999)
                     
                     # Filter for active M365 groups only, include all distribution lists
-                    from datetime import datetime
                     cutoff_year = current_app.config.get('GROUP_ACTIVITY_CUTOFF_YEAR', 2025)
                     cutoff_date = datetime(cutoff_year, 1, 1, tzinfo=None)
                     
