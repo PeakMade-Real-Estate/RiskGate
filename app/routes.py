@@ -466,6 +466,16 @@ def scan_entra():
             risk_level = login.get('risk_level', 'Critical')
             prev_location = login.get('previous_location', 'Unknown')
             travel_type = login.get('travel_type', 'International')
+            risk_factors = login.get('risk_factors', [])
+            
+            # Format risk factors for display
+            risk_factor_labels = {
+                'different_device': 'Different Device',
+                'new_location': 'New Location',
+                'extreme_speed': 'Extreme Speed',
+                'international': 'International Travel'
+            }
+            risk_factors_display = ', '.join([risk_factor_labels.get(f, f) for f in risk_factors])
             
             # Check if MFA change occurred shortly after this login
             from dateutil import parser
@@ -476,7 +486,7 @@ def scan_entra():
                 risk_level = 'CRITICAL - MFA Changed'
                 finding = '🚨 CRITICAL: Impossible Travel + MFA Change'
             else:
-                finding = f'Impossible Travel Detected ({risk_level})'
+                finding = f'Impossible Travel ({risk_factors_display})'
             
             alerts.append({
                 'time': login.get('createdDateTime', 'N/A')[:19].replace('T', ' '),
@@ -713,10 +723,47 @@ def analyze_impossible_travel(signin_logs):
         if required_speed_mph > threshold:
             travel_type = 'Domestic' if is_same_country else 'International'
             
+            # RISK COMBINATION DETECTION
+            # Only alert if impossible travel is combined with OTHER suspicious factors
+            risk_factors = []
+            
+            # Factor 1: Different device used (potential device compromise)
+            devices_differ = (curr_device_id and prev_device_id and curr_device_id != prev_device_id)
+            if devices_differ:
+                risk_factors.append('different_device')
+            
+            # Factor 2: New location (never seen in user's history)
+            curr_city = current_loc.get('city', '')
+            is_new_location = curr_rounded not in user_locations.get(user, {})
+            if is_new_location and curr_city:  # Only count if we have city data
+                risk_factors.append('new_location')
+            
+            # Factor 3: Extremely high speed (>10000 mph - physically impossible even with fast VPN)
+            is_extreme_speed = required_speed_mph > 10000
+            if is_extreme_speed:
+                risk_factors.append('extreme_speed')
+            
+            # Factor 4: International travel (higher risk than domestic)
+            if not is_same_country:
+                risk_factors.append('international')
+            
+            # Require at least 2 risk factors to trigger alert
+            # This filters out simple VPN switches and legitimate travel
+            if len(risk_factors) < 2:
+                curr_city = current_loc.get('city', 'Unknown')
+                prev_city = previous_loc.get('city', 'Unknown')
+                current_app.logger.info(
+                    f"Suppressed travel alert for {user}: Insufficient risk factors "
+                    f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, "
+                    f"factors: {', '.join(risk_factors) if risk_factors else 'none'})"
+                )
+                continue  # Skip - not enough risk factors
+            
+            # Multiple risk factors detected - this is suspicious
             risk_level = 'Suspicious'
             if required_speed_mph > 1000:
                 risk_level = 'High Risk'
-            if required_speed_mph > 10000:
+            if required_speed_mph > 10000 or 'different_device' in risk_factors:
                 risk_level = 'Critical'
             
             # Add extra context for domestic US travel
@@ -729,10 +776,16 @@ def analyze_impossible_travel(signin_logs):
             current['required_speed_mph'] = round(required_speed_mph, 1)
             current['risk_level'] = risk_level
             current['travel_type'] = travel_type
+            current['risk_factors'] = risk_factors  # Track what triggered the alert
             prev_city = previous_loc.get('city', 'Unknown')
             prev_state = previous_loc.get('state', '')
             prev_country = previous_loc.get('countryOrRegion', 'Unknown')
             current['previous_location'] = f"{prev_city}, {prev_state}, {prev_country}" if prev_state else f"{prev_city}, {prev_country}"
+            
+            current_app.logger.warning(
+                f"ALERT: {user} - {prev_city} → {curr_city} ({required_speed_mph:.0f} mph) "
+                f"Risk factors: {', '.join(risk_factors)}"
+            )
             impossible.append(current)
     
     return impossible
