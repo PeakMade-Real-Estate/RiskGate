@@ -16,7 +16,7 @@
                         <div class="d-flex justify-content-between align-items-center">
                             <div>
                                 <small class="text-muted d-block" style="font-size: 0.75rem;">Impossible Logins</small>
-                                <h4 class="mb-0" style="font-weight: 700;">{{ impossible_logins_count }}</h4>
+                                <h4 class="mb-0" id="impossibleLoginsCount" style="font-weight: 700;">{{ impossible_logins_count }}</h4>
                             </div>
                             <div>
                                 <i class="fas fa-plane" style="opacity: 0.3; font-size: 1.5rem;"></i>
@@ -26,7 +26,7 @@
                 </div>
                 
                 <!-- Target User/Group Display -->
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <div class="alert alert-light mb-0 py-1 px-2" style="border-left: 3px solid #6c757d;">
                         <div class="d-flex justify-content-between align-items-start">
                             <div style="flex: 1;">
@@ -43,51 +43,53 @@
                     </div>
                 </div>
                 
-                <!-- Data Source Toggle -->
-                <div class="col-md-2">
-                    <form method="POST" action="{{ url_for('main.toggle_mode') }}" class="mb-0">
-                        <button type="submit" class="btn btn-sm w-100" 
-                                style="{% if using_mock %}background-color: #ff9800; color: white;{% else %}background-color: #28a745; color: white;{% endif %} font-weight: 600; font-size: 0.7rem; padding: 4px;">
-                            {% if using_mock %}
-                            <i class="fas fa-flask me-1"></i>MOCK
-                            {% else %}
-                            <i class="fas fa-cloud me-1"></i>REAL
-                            {% endif %}
-                        </button>
-                        <small class="text-muted d-block text-center" style="font-size: 0.6rem; margin-top: 2px;">Click to toggle</small>
-                    </form>
-                </div>
-                
                 <!-- Action Buttons -->
-                <div class="col-md-3">
-                    <form method="POST" action="{{ url_for('main.scan_entra') }}" class="mb-0" id="scanForm" onsubmit="showSpinner()">
-                        <input type="hidden" name="scan_type" id="scanType" value="user">
-                        <input type="hidden" name="target_value" id="targetValue" value="tgaskins@peakmade.com">
-                        <div class="d-flex gap-1">
-                            <button type="submit" class="btn btn-primary btn-sm" id="scanButton" style="font-weight: 600; font-size: 0.75rem; flex: 2;">
+                <div class="col-md-6">
+                    <div class="d-flex gap-1 flex-nowrap align-items-start">
+                        <!-- Scan Button -->
+                        <form method="POST" action="{{ url_for('main.scan_entra') }}" class="mb-0" id="scanForm" onsubmit="showSpinner()" style="width: 100px;">
+                            <input type="hidden" name="scan_type" id="scanType" value="user">
+                            <input type="hidden" name="target_value" id="targetValue" value="tgaskins@peakmade.com">
+                            <button type="submit" class="btn btn-primary btn-sm w-100" id="scanButton" style="font-weight: 600; font-size: 0.75rem; padding: 4px 8px;">
                                 <span id="scanButtonText">
                                     <i class="fas fa-search me-1"></i>Scan
                                 </span>
-                                <span id="scanButtonSpinner" class="d-none">
+                                <span id="scanButtonSpinner" class="d-none" style="font-size: 0.68rem;">
                                     <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
                                     Scanning...
                                 </span>
                             </button>
-                            <button type="button" class="btn btn-outline-danger btn-sm" style="font-weight: 600; font-size: 0.75rem; flex: 1;"
-                                    onclick="if(confirm('Clear all scan results?')) document.getElementById('clearForm').submit();">
-                                <i class="fas fa-trash me-1"></i>Clear
+                        </form>
+                        
+                        <!-- Data Source Toggle -->
+                        <form method="POST" action="{{ url_for('main.toggle_mode') }}" class="mb-0" style="width: 70px;">
+                            <button type="submit" class="btn btn-sm w-100" 
+                                    style="{% if using_mock %}background-color: #ff9800; color: white;{% else %}background-color: #28a745; color: white;{% endif %} font-weight: 600; font-size: 0.75rem; padding: 4px 6px;">
+                                {% if using_mock %}
+                                <i class="fas fa-flask me-1"></i>MOCK
+                                {% else %}
+                                <i class="fas fa-cloud me-1"></i>REAL
+                                {% endif %}
                             </button>
-                            <button type="button" class="btn btn-outline-secondary btn-sm" style="font-weight: 600; font-size: 0.75rem; flex: 1.5;"
-                                    onclick="document.getElementById('reportForm').submit();">
-                                <i class="fas fa-envelope me-1"></i>Report
-                            </button>
-                        </div>
-                        {% if last_scan %}
-                        <small class="text-muted d-block text-center" style="font-size: 0.65rem; margin-top: 2px;">
-                            <i class="fas fa-clock me-1"></i>Last scan: {{ last_scan }}
-                        </small>
-                        {% endif %}
-                    </form>
+                        </form>
+                        
+                        <!-- Clear Button -->
+                        <button type="button" class="btn btn-outline-danger btn-sm" style="font-weight: 600; font-size: 0.75rem; width: 70px; padding: 4px 6px;"
+                                onclick="if(confirm('Clear all scan results?')) document.getElementById('clearForm').submit();">
+                            <i class="fas fa-trash me-1"></i>Clear
+                        </button>
+                        
+                        <!-- Report Button -->
+                        <button type="button" class="btn btn-outline-secondary btn-sm" style="font-weight: 600; font-size: 0.75rem; width: 75px; padding: 4px 6px;"
+                                onclick="document.getElementById('reportForm').submit();">
+                            <i class="fas fa-envelope me-1"></i>Report
+                        </button>
+                    </div>
+                    {% if last_scan %}
+                    <small class="text-muted d-block" id="lastScanTimestamp" style="font-size: 0.65rem; margin-top: 2px; margin-left: 4px;">
+                        <i class="fas fa-clock me-1"></i>Last scan: {{ last_scan }}
+                    </small>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -103,18 +105,14 @@
 
 
     <!-- Recent Scan Results / Alerts Section -->
-    <div class="card shadow-sm">
+    {% if recent_alerts %}
+    <div class="card shadow-sm" id="alertsSection">
         <div class="card-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 6px 12px;">
             <small class="mb-0" style="font-weight: 600;">
                 <i class="fas fa-exclamation-triangle me-1"></i>Recent Alerts
             </small>
         </div>
         <div class="card-body p-0">
-            
-            <!-- TODO: Replace with actual data from EntraSecurityAlert table -->
-            <!-- These placeholder rows demonstrate the layout for real scan results -->
-            
-            {% if recent_alerts %}
                 <div class="table-responsive">
                     <table class="table table-hover table-sm mb-0" style="font-size: 0.8rem;">
                         <thead style="background-color: #f8f9fa;">
@@ -206,19 +204,13 @@
                         </tbody>
                     </table>
                 </div>
-            {% else %}
-                <div class="p-3 text-center text-muted">
-                    <i class="fas fa-inbox mb-1" style="opacity: 0.3; font-size: 1.5rem;"></i>
-                    <p class="mb-0" style="font-size: 0.8rem;">No alerts yet. Select a user and scan.</p>
-                </div>
-            {% endif %}
-            
         </div>
     </div>
+    {% endif %}
 
     <!-- Scanned Users Summary -->
     {% if scanned_users %}
-    <div class="card shadow-sm mt-2">
+    <div class="card shadow-sm mt-2" id="scannedUsersSection">
         <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white; padding: 6px 12px;">
             <small class="mb-0" style="font-weight: 600;">
                 <i class="fas fa-users me-1"></i>Scanned Users ({{ scanned_users|length }} total)
@@ -269,7 +261,7 @@
 
     <!-- All Sign-In Logs Section -->
     {% if all_signin_logs %}
-    <div class="card shadow-sm mt-2">
+    <div class="card shadow-sm mt-2" id="allSignInLogsSection">
         <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); color: white; padding: 6px 12px;">
             <small class="mb-0" style="font-weight: 600;">
                 <i class="fas fa-list me-1"></i>All Sign-In Activity ({{ total_signin_count }} events)
@@ -375,18 +367,23 @@
                     <!-- Group Tab -->
                     <div class="tab-pane fade" id="group-pane" role="tabpanel">
                         <div class="mb-3">
-                            <label for="groupSelect" class="form-label">Select Entra Group</label>
-                            <select class="form-select" id="groupSelect" onchange="onGroupSelectChange()">
-                                <option value="">-- Loading groups... --</option>
-                            </select>
-                            <small class="form-text text-muted">
-                                <i class="fas fa-users me-1"></i>Select a distribution group to scan
-                            </small>
-                        </div>
-                        
-                        <div id="groupMembersInfo" class="alert alert-info d-none" style="font-size: 0.85rem;">
-                            <i class="fas fa-users me-1"></i>
-                            <span id="memberCountText">0 members</span> will be scanned
+                            <label for="groupInput" class="form-label">Entra Group Name</label>
+                            <input type="text" class="form-control" id="groupInput" placeholder="Type group name here...">
+                            <div id="groupMemberInfo" class="mt-2 d-none">
+                                <small class="text-muted d-block mb-2">
+                                    <i class="fas fa-users me-1"></i>
+                                    <span id="memberCountText">0 members</span>
+                                </small>
+                                <div id="memberList" class="border rounded p-2" style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa;">
+                                    <!-- Member list will be populated here -->
+                                </div>
+                            </div>
+                            <div id="groupErrorInfo" class="mt-2 d-none">
+                                <small class="text-danger">
+                                    <i class="fas fa-exclamation-circle me-1"></i>
+                                    <span id="groupErrorText">Group not found</span>
+                                </small>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -436,76 +433,135 @@
 -->
 
 <script>
+let scanProgressMessages = [
+    'Connecting to Microsoft Graph API...',
+    'Authenticating with Entra ID...',
+    'Fetching sign-in logs...',
+    'Analyzing geographic locations...',
+    'Calculating travel distances...',
+    'Detecting impossible travel patterns...',
+    'Checking device trust relationships...',
+    'Evaluating risk factors...',
+    'Finalizing security analysis...'
+];
+let currentMessageIndex = 0;
+let progressInterval = null;
+let currentGroupId = null;
+
 function showSpinner() {
-    // Hide button text and show spinner
+    // Clear previous scan results immediately
+    const alertsSection = document.getElementById('alertsSection');
+    const scannedUsersSection = document.getElementById('scannedUsersSection');
+    const lastScanTimestamp = document.getElementById('lastScanTimestamp');
+    
+    if (alertsSection) alertsSection.style.display = 'none';
+    if (scannedUsersSection) scannedUsersSection.style.display = 'none';
+    if (lastScanTimestamp) lastScanTimestamp.style.display = 'none';
+    
+    // Hide button text and show spinner with first message
     document.getElementById('scanButtonText').classList.add('d-none');
-    document.getElementById('scanButtonSpinner').classList.remove('d-none');
+    const spinnerElement = document.getElementById('scanButtonSpinner');
+    spinnerElement.classList.remove('d-none');
+    
+    // Set initial progress message
+    currentMessageIndex = 0;
+    spinnerElement.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${scanProgressMessages[0]}`;
+    
     // Disable button to prevent multiple clicks
     document.getElementById('scanButton').disabled = true;
+    
+    // Cycle through progress messages every 2 seconds
+    progressInterval = setInterval(() => {
+        currentMessageIndex = (currentMessageIndex + 1) % scanProgressMessages.length;
+        spinnerElement.innerHTML = `<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${scanProgressMessages[currentMessageIndex]}`;
+    }, 2000);
 }
 
-let currentGroups = [];
-let selectedGroup = null;
-
-// Load groups when modal opens
-document.getElementById('userSelectorModal').addEventListener('show.bs.modal', function() {
-    loadGroups();
-});
-
-// When group is selected from dropdown
-function onGroupSelectChange() {
-    const groupSelect = document.getElementById('groupSelect');
-    const groupId = groupSelect.value;
+function checkGroupMembers() {
+    const groupInput = document.getElementById('groupInput').value.trim();
     
-    if (!groupId) {
-        document.getElementById('groupMembersInfo').classList.add('d-none');
-        selectedGroup = null;
+    if (!groupInput) {
+        document.getElementById('groupMemberInfo').classList.add('d-none');
+        document.getElementById('groupErrorInfo').classList.add('d-none');
         return;
     }
     
-    // Find matching group by ID
-    selectedGroup = currentGroups.find(g => g.id === groupId);
+    // Hide previous results
+    document.getElementById('groupMemberInfo').classList.add('d-none');
+    document.getElementById('groupErrorInfo').classList.add('d-none');
     
-    if (selectedGroup) {
-        loadGroupMembers(selectedGroup.id);
-    }
-}
-
-function loadGroups() {
-    const groupSelect = document.getElementById('groupSelect');
-    
-    groupSelect.innerHTML = '<option value="">-- Loading groups... --</option>';
-    
+    // First, fetch all groups and find the matching one
     fetch('{{ url_for("main.get_groups") }}')
         .then(response => response.json())
         .then(data => {
-            currentGroups = data.groups;
+            // Find group by display name (case insensitive exact match)
+            let matchedGroup = data.groups.find(g => 
+                g.displayName.toLowerCase() === groupInput.toLowerCase()
+            );
             
-            // Populate dropdown with groups
-            groupSelect.innerHTML = '<option value="">-- Select a group --</option>';
-            data.groups.forEach(group => {
-                const option = document.createElement('option');
-                option.value = group.id;
-                option.textContent = group.displayName;
-                groupSelect.appendChild(option);
-            });
+            // If no exact match, try partial match
+            if (!matchedGroup) {
+                matchedGroup = data.groups.find(g => 
+                    g.displayName.toLowerCase().includes(groupInput.toLowerCase())
+                );
+            }
+            
+            if (!matchedGroup) {
+                // Group not found - don't show error while typing
+                currentGroupId = null;
+                return;
+            }
+            
+            // Store the group ID for later use
+            currentGroupId = matchedGroup.id;
+            
+            // Now fetch the members of this group
+            return fetch(`{{ url_for('main.get_group_members', group_id='GROUP_ID') }}`.replace('GROUP_ID', matchedGroup.id));
         })
-        .catch(error => {
-            console.error('Error loading groups:', error);
-            groupSelect.innerHTML = '<option value="">-- Error loading groups --</option>';
-        });
-}
-
-function loadGroupMembers(groupId) {
-    fetch(`{{ url_for('main.get_group_members', group_id='GROUP_ID') }}`.replace('GROUP_ID', groupId))
-        .then(response => response.json())
+        .then(response => {
+            if (!response) return; // Group not found, already handled
+            return response.json();
+        })
         .then(data => {
+            if (!data) return; // Group not found, already handled
+            
             const memberCount = data.members.length;
             document.getElementById('memberCountText').textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
-            document.getElementById('groupMembersInfo').classList.remove('d-none');
+            
+            // Populate member list
+            const memberListElement = document.getElementById('memberList');
+            if (memberCount === 0) {
+                memberListElement.innerHTML = '<small class="text-muted">No members found</small>';
+            } else {
+                // Sort members by display name or email
+                const sortedMembers = data.members.sort((a, b) => {
+                    const nameA = a.displayName || a.userPrincipalName || '';
+                    const nameB = b.displayName || b.userPrincipalName || '';
+                    return nameA.localeCompare(nameB);
+                });
+                
+                // Create list of members
+                let memberHTML = '<ul class="list-unstyled mb-0" style="font-size: 0.85rem;">';
+                sortedMembers.forEach(member => {
+                    const displayName = member.displayName || 'Unknown';
+                    const email = member.userPrincipalName || member.mail || '';
+                    memberHTML += `<li class="py-1">
+                        <i class="fas fa-user me-2" style="color: #6c757d; font-size: 0.7rem;"></i>
+                        <strong>${displayName}</strong>
+                        ${email ? `<br><small class="text-muted ms-3">${email}</small>` : ''}
+                    </li>`;
+                });
+                memberHTML += '</ul>';
+                memberListElement.innerHTML = memberHTML;
+            }
+            
+            document.getElementById('groupMemberInfo').classList.remove('d-none');
         })
         .catch(error => {
-            console.error('Error loading group members:', error);
+            console.error('Error checking group:', error);
+            document.getElementById('groupErrorText').textContent = 'Error loading group data';
+            document.getElementById('groupErrorInfo').classList.remove('d-none');
+            currentGroupId = null;
         });
 }
 
@@ -523,31 +579,88 @@ function applySelection() {
         document.getElementById('targetValue').value = userInput;
         document.getElementById('targetDisplay').textContent = userInput;
     } else {
-        // Group mode - use the dropdown selection
-        const groupSelect = document.getElementById('groupSelect');
-        const groupId = groupSelect.value;
+        // Group mode - use the group ID if available, otherwise the group name
+        const groupInput = document.getElementById('groupInput').value.trim();
         
-        if (!groupId) {
-            alert('Please select a group from the dropdown');
+        if (!groupInput) {
+            alert('Please enter a group name');
             return;
         }
         
         document.getElementById('scanType').value = 'group';
-        
-        if (selectedGroup) {
-            // Use the selected group
-            document.getElementById('targetValue').value = selectedGroup.id;
-            document.getElementById('targetDisplay').textContent = selectedGroup.displayName + ' (Group)';
-        } else {
-            alert('Please select a valid group');
-            return;
-        }
+        // Use the group ID if we've looked it up, otherwise use the name (backend will search)
+        document.getElementById('targetValue').value = currentGroupId || groupInput;
+        document.getElementById('targetDisplay').textContent = groupInput + ' (Group)';
     }
+    
+    // Reset impossible logins count to 0
+    const countElement = document.getElementById('impossibleLoginsCount');
+    if (countElement) {
+        countElement.textContent = '0';
+    }
+    
+    // Clear previous scan results (remove them from DOM)
+    const alertsSection = document.getElementById('alertsSection');
+    const scannedUsersSection = document.getElementById('scannedUsersSection');
+    const allSignInLogsSection = document.getElementById('allSignInLogsSection');
+    const lastScanTimestamp = document.getElementById('lastScanTimestamp');
+    
+    if (alertsSection) {
+        alertsSection.remove();
+    }
+    if (scannedUsersSection) {
+        scannedUsersSection.remove();
+    }
+    if (allSignInLogsSection) {
+        allSignInLogsSection.remove();
+    }
+    if (lastScanTimestamp) {
+        lastScanTimestamp.remove();
+    }
+    
+    // Remove all flash message alerts (green success banners at top)
+    document.querySelectorAll('.alert').forEach(alert => {
+        // Only remove dismissible alerts (flash messages) - not the fixed cards
+        if (alert.classList.contains('alert-dismissible')) {
+            alert.remove();
+        }
+    });
     
     // Close modal
     const modal = bootstrap.Modal.getInstance(document.getElementById('userSelectorModal'));
     modal.hide();
 }
+
+// Add event listener for auto-search on group input
+let searchTimeout = null;
+document.addEventListener('DOMContentLoaded', function() {
+    const groupInput = document.getElementById('groupInput');
+    if (groupInput) {
+        // Auto-search as user types (with debouncing)
+        groupInput.addEventListener('input', function() {
+            // Clear previous timeout
+            if (searchTimeout) {
+                clearTimeout(searchTimeout);
+            }
+            
+            // Set new timeout to search after 500ms of no typing
+            searchTimeout = setTimeout(() => {
+                checkGroupMembers();
+            }, 500);
+        });
+        
+        // Also support Enter key
+        groupInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (searchTimeout) {
+                    clearTimeout(searchTimeout);
+                }
+                checkGroupMembers();
+            }
+        });
+    }
+});
 </script>
 
 {% endblock %}
