@@ -52,6 +52,8 @@ scan_results = {
     'impossible_logins': [],
     'alerts': [],
     'formatted_signin_logs': [],
+    'mfa_events': [],  # MFA/auth method changes
+    'correlated_mfa_events': [],  # MFA changes linked to risky logins
     'last_scan': None,
     'scanned_users': [],  # List of all users that were scanned
     'users_with_activity': [],  # Users who had sign-ins
@@ -91,6 +93,8 @@ def root():
                          scanned_users=scan_results.get('scanned_users', []),
                          users_with_activity=scan_results.get('users_with_activity', []),
                          users_without_activity=scan_results.get('users_without_activity', []),
+                         mfa_events=scan_results.get('mfa_events', []),
+                         correlated_mfa_events=scan_results.get('correlated_mfa_events', []),
                          last_scan=scan_results['last_scan'],
                          current_mode=current_mode,
                          using_mock=session.get('use_mock_data', False))
@@ -266,6 +270,8 @@ def clear_scan():
     scan_results['users_without_activity'] = []
     scan_results['alerts'] = []
     scan_results['formatted_signin_logs'] = []
+    scan_results['mfa_events'] = []
+    scan_results['correlated_mfa_events'] = []
     scan_results['last_scan'] = None
     
     session.pop('selected_targets', None)
@@ -298,6 +304,8 @@ def scan_entra():
     scan_results['users_without_activity'] = []
     scan_results['alerts'] = []
     scan_results['formatted_signin_logs'] = []
+    scan_results['mfa_events'] = []
+    scan_results['correlated_mfa_events'] = []
     scan_results['last_scan'] = None  # Clear timestamp on new scan
     
     # Get scan targets from form
@@ -476,22 +484,109 @@ def scan_entra():
         scan_results['last_scan'] = est_time.strftime('%Y-%m-%d %I:%M:%S %p EST')
         scan_results['using_mock_data'] = use_mock_data
         
-        # Check for MFA changes after impossible travel (critical alert escalation)
+        # Fetch and process MFA changes (authentication method changes)
+        mfa_events = []
+        mfa_change_times = set()
+        correlated_mfa_events = []
+        
         try:
             if not use_mock_data:
                 audit_logs = graph_client.fetch_audit_logs(hours_back=168)
             else:
                 audit_logs = []
-            mfa_change_times = set()
+            
             if audit_logs:
                 for audit in audit_logs:
-                    if audit.get('activityDisplayName') in ['User registered security info', 'User changed default security info', 
-                                                              'User deleted security info']:
+                    activity_name = audit.get('activityDisplayName', '')
+                    
+                    # Check if this is an MFA/auth method event
+                    mfa_keywords = ['security info', 'authentication method', 'authenticator', 
+                                  'phone', 'fido', 'temporary access pass', 'registered', 
+                                  'deleted', 'updated', 'reset', 'removed']
+                    
+                    if any(keyword in activity_name.lower() for keyword in mfa_keywords):
                         from dateutil import parser
-                        mfa_change_times.add(parser.parse(audit.get('activityDateTime')))
+                        mfa_time = parser.parse(audit.get('activityDateTime'))
+                        mfa_change_times.add(mfa_time)
+                        
+                        # Extract target user
+                        target_resources = audit.get('targetResources', []) or []
+                        target_user = 'Unknown'
+                        if target_resources:
+                            target_user = target_resources[0].get('userPrincipalName', 'Unknown')
+                        
+                        # Extract who initiated
+                        initiated_by = audit.get('initiatedBy', {}) or {}
+                        user_initiated = initiated_by.get('user', {}) or {}
+                        app_initiated = initiated_by.get('app', {}) or {}
+                        
+                        if user_initiated:
+                            initiated_by_display = user_initiated.get('userPrincipalName', 'Unknown User')
+                        elif app_initiated:
+                            initiated_by_display = f"App: {app_initiated.get('displayName', 'Unknown App')}"
+                        else:
+                            initiated_by_display = 'System'
+                        
+                        # Determine action type
+                        activity_lower = activity_name.lower()
+                        if 'registered' in activity_lower or 'added' in activity_lower:
+                            action_type = 'Added'
+                            action_icon = '➕'
+                        elif 'deleted' in activity_lower or 'removed' in activity_lower:
+                            action_type = 'Removed'
+                            action_icon = '➖'
+                        elif 'updated' in activity_lower or 'changed' in activity_lower:
+                            action_type = 'Updated'
+                            action_icon = '✏️'
+                        elif 'reset' in activity_lower:
+                            action_type = 'Reset'
+                            action_icon = '🔄'
+                        else:
+                            action_type = 'Changed'
+                            action_icon = '🔧'
+                        
+                        # Check correlation with recent impossible logins
+                        correlated_with_risky_login = False
+                        correlation_details = None
+                        
+                        for impossible_login in impossible_logins:
+                            login_time = parser.parse(impossible_login.get('createdDateTime'))
+                            time_diff = abs((mfa_time - login_time).total_seconds())
+                            
+                            # If MFA change within 1 hour of impossible login
+                            if time_diff < 3600 and impossible_login.get('userPrincipalName') == target_user:
+                                correlated_with_risky_login = True
+                                correlation_details = {
+                                    'login_time': convert_to_est(impossible_login.get('createdDateTime')),
+                                    'login_location': impossible_login.get('location', {}).get('city', 'Unknown'),
+                                    'time_diff_minutes': int(time_diff / 60),
+                                    'required_speed_mph': impossible_login.get('required_speed_mph', 0)
+                                }
+                                break
+                        
+                        mfa_event = {
+                            'time': convert_to_est(audit.get('activityDateTime')),
+                            'user': target_user,
+                            'activity': activity_name,
+                            'action_type': action_type,
+                            'action_icon': action_icon,
+                            'initiated_by': initiated_by_display,
+                            'correlated': correlated_with_risky_login,
+                            'correlation_details': correlation_details
+                        }
+                        
+                        mfa_events.append(mfa_event)
+                        
+                        if correlated_with_risky_login:
+                            correlated_mfa_events.append(mfa_event)
+                            
         except Exception as e:
             current_app.logger.warning(f"Could not fetch MFA audit logs: {e}")
             mfa_change_times = set()
+        
+        # Store MFA events in scan results
+        scan_results['mfa_events'] = mfa_events
+        scan_results['correlated_mfa_events'] = correlated_mfa_events
         
         # Generate detailed alerts with full location and device info
         alerts = []
@@ -523,11 +618,28 @@ def scan_entra():
             # Check if MFA change occurred shortly after this login
             from dateutil import parser
             login_time = parser.parse(login.get('createdDateTime'))
+            login_user = login.get('userPrincipalName', 'N/A')
             mfa_changed_after = any(abs((mfa_time - login_time).total_seconds()) < 3600 for mfa_time in mfa_change_times)
+            
+            # Find specific MFA event details if correlated
+            mfa_details = None
+            if mfa_changed_after:
+                for mfa_evt in mfa_events:
+                    if mfa_evt['user'] == login_user and mfa_evt['correlated']:
+                        mfa_details = {
+                            'activity': mfa_evt['activity'],
+                            'action_type': mfa_evt['action_type'],
+                            'action_icon': mfa_evt['action_icon'],
+                            'time_diff': mfa_evt['correlation_details']['time_diff_minutes'] if mfa_evt['correlation_details'] else 0
+                        }
+                        break
             
             if mfa_changed_after:
                 risk_level = 'CRITICAL - MFA Changed'
-                finding = '🚨 CRITICAL: Impossible Travel + MFA Change'
+                if mfa_details:
+                    finding = f"🚨 CRITICAL: Impossible Travel + MFA {mfa_details['action_type']} ({mfa_details['time_diff']} min after)"
+                else:
+                    finding = '🚨 CRITICAL: Impossible Travel + MFA Change'
             else:
                 finding = f'Impossible Travel ({risk_factors_display})'
             
@@ -547,6 +659,7 @@ def scan_entra():
                 'ip_address': login.get('ipAddress', 'N/A'),
                 'app': login.get('appDisplayName', 'N/A'),
                 'details': f"Travel from {prev_location} to {city}, {country}: {distance} miles in {time_between} hrs ({speed} mph required)",
+                'mfa_details': mfa_details,
                 'status': 'Open'
             })
         
@@ -843,6 +956,54 @@ def report_findings():
     """
     flash('Report feature - will integrate with SharePoint in future', 'info')
     return redirect(url_for('main.root'))
+
+
+@bp.route('/mfa-monitoring', methods=['GET'])
+def mfa_monitoring():
+    """
+    Dedicated MFA monitoring page showing all authentication method changes
+    and their correlation with risky sign-in events.
+    """
+    mfa_events = scan_results.get('mfa_events', [])
+    correlated_events = scan_results.get('correlated_mfa_events', [])
+    
+    # Get MFA stats
+    total_mfa_events = len(mfa_events)
+    correlated_count = len(correlated_events)
+    uncorrelated_count = total_mfa_events - correlated_count
+    
+    # Group by action type
+    action_stats = {}
+    for evt in mfa_events:
+        action_type = evt.get('action_type', 'Unknown')
+        action_stats[action_type] = action_stats.get(action_type, 0) + 1
+    
+    return render_template('mfa_monitoring.html',
+                          mfa_events=mfa_events,
+                          correlated_events=correlated_events,
+                          total_mfa_events=total_mfa_events,
+                          correlated_count=correlated_count,
+                          uncorrelated_count=uncorrelated_count,
+                          action_stats=action_stats,
+                          last_scan=scan_results.get('last_scan'),
+                          current_user=get_easy_auth_user())
+
+
+@bp.route('/mfa-events-data', methods=['GET'])
+def mfa_events_data():
+    """
+    API endpoint returning MFA events as JSON for AJAX/refresh.
+    """
+    mfa_events = scan_results.get('mfa_events', [])
+    correlated_events = scan_results.get('correlated_mfa_events', [])
+    
+    return {
+        'mfa_events': mfa_events,
+        'correlated_events': correlated_events,
+        'total_events': len(mfa_events),
+        'correlated_count': len(correlated_events),
+        'last_scan': scan_results.get('last_scan')
+    }, 200
 
 
 @bp.route('/health', methods=['GET'])
