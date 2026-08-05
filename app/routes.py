@@ -59,38 +59,6 @@ scan_results = {
 }
 
 
-@bp.route('/auth/login/aad/callback', methods=['GET', 'POST'])
-def auth_callback():
-    """
-    Handle Azure AD Easy Auth callback.
-    This route is called by Azure App Service Authentication after successful login.
-    """
-    # Easy Auth handles the actual authentication
-    # This route just needs to exist and redirect to the main app
-    return redirect(url_for('main.root'))
-
-
-@bp.route('/login', methods=['GET'])
-def login():
-    """
-    Redirect to Azure AD login via Easy Auth.
-    """
-    # In production with Easy Auth enabled, redirect to /.auth/login/aad
-    # This triggers Azure's authentication flow
-    return redirect('/.auth/login/aad?post_login_redirect_uri=/')
-
-
-@bp.route('/logout', methods=['GET', 'POST'])
-def logout():
-    """
-    Logout user via Easy Auth.
-    """
-    # Clear session
-    session.clear()
-    # Redirect to Easy Auth logout
-    return redirect('/.auth/logout?post_logout_redirect_uri=/')
-
-
 @bp.route('/', methods=['GET'])
 def root():
     """
