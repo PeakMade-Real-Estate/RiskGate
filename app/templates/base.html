@@ -105,13 +105,25 @@
             </h1>
         </div>
 
-        <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; height: 80px;">
+        <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; height: 80px; gap: 20px;">
+            {% if current_user %}
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="text-align: right;">
+                    <div style="color: white; font-size: 0.9rem; font-weight: 600;">{{ current_user.display_name }}</div>
+                    <div style="color: rgba(255,255,255,0.8); font-size: 0.75rem;">{{ current_user.email }}</div>
+                </div>
+                <a href="/.auth/logout?post_logout_redirect_uri=/" 
+                   class="btn btn-sm btn-light" 
+                   style="border-radius: 6px; padding: 6px 12px; font-size: 0.85rem;"
+                   title="Logout">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </a>
+            </div>
+            {% endif %}
             <img src="{{ url_for('static', filename='Redpoint_logo.png') }}" alt="Redpoint Logo" style="height: 32px; width: auto;">
         </div>
 
     </div>
-
-    <!-- User info removed - simplified version -->
 </header>
 
 <main class="main-content">

@@ -11,6 +11,25 @@ from app.mock_data import generate_mock_signin_logs, get_mock_users, get_mock_gr
 bp = Blueprint('main', __name__)
 
 
+def get_easy_auth_user():
+    """
+    Get user info from Azure Easy Auth headers.
+    Returns dict with user info or None if not authenticated.
+    """
+    # Easy Auth injects these headers
+    user_principal = request.headers.get('X-MS-CLIENT-PRINCIPAL-NAME')  # user@domain.com
+    user_id = request.headers.get('X-MS-CLIENT-PRINCIPAL-ID')  # Azure AD object ID
+    user_name = request.headers.get('X-MS-CLIENT-PRINCIPAL')  # Base64 encoded claims
+    
+    if user_principal:
+        return {
+            'email': user_principal,
+            'id': user_id,
+            'display_name': user_principal.split('@')[0].title() if user_principal else 'User'
+        }
+    return None
+
+
 def convert_to_est(utc_timestamp_str):
     """Convert UTC timestamp string to EST format."""
     if not utc_timestamp_str or utc_timestamp_str == 'N/A':
@@ -45,6 +64,9 @@ def root():
     """
     Root page - show dashboard with scan results from memory.
     """
+    # Get current user from Easy Auth
+    current_user = get_easy_auth_user()
+    
     # Count impossible logins from memory
     impossible_count = len([log for log in scan_results['signin_logs'] 
                            if log.get('impossible_travel', False)])
@@ -58,6 +80,7 @@ def root():
     target_display = ', '.join(selected_targets) if isinstance(selected_targets, list) else selected_targets
     
     return render_template('securityscan_dashboard.html', 
+                         current_user=current_user,
                          impossible_logins_count=impossible_count,
                          target_user=target_display,
                          selected_targets=selected_targets,
