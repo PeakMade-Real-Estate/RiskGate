@@ -1,7 +1,7 @@
 """
 Application routes - with Microsoft Graph API integration (in-memory storage).
 """
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app, jsonify
 from datetime import datetime, timezone, timedelta
 import requests
 import os
@@ -60,6 +60,68 @@ scan_results = {
     'users_without_activity': []  # Users with no sign-ins in the period
 }
 
+def load_automatic_scan_results():
+    """Load automatic scan results from JSON file if it exists."""
+    import json
+    from pathlib import Path
+    
+    results_file = Path(__file__).parent.parent / 'automatic_scan_results.json'
+    
+    if results_file.exists():
+        try:
+            with open(results_file, 'r') as f:
+                return json.load(f)
+        except Exception as e:
+            current_app.logger.error(f"Failed to load automatic scan results: {e}")
+            return None
+    return None
+
+
+@bp.route('/api/trigger-scan', methods=['POST'])
+def trigger_scan():
+    """
+    API endpoint to trigger automatic scan - designed for Power Automate cloud flows.
+    
+    Security: Requires X-API-Key header matching SCAN_API_KEY environment variable.
+    
+    Returns:
+        JSON response with scan status and timestamp
+    """
+    # Security check: Verify API key
+    api_key = request.headers.get('X-API-Key')
+    expected_key = os.environ.get('SCAN_API_KEY')
+    
+    if not expected_key:
+        current_app.logger.error('SCAN_API_KEY environment variable not set')
+        return jsonify({'error': 'Server configuration error'}), 500
+    
+    if api_key != expected_key:
+        current_app.logger.warning(f'Unauthorized scan trigger attempt from {request.remote_addr}')
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    # Trigger the scan using the scheduler function
+    try:
+        current_app.logger.info('API trigger: Starting automatic scan')
+        from app.scheduler import perform_automatic_scan
+        
+        # Run scan in background (non-blocking)
+        import threading
+        scan_thread = threading.Thread(
+            target=perform_automatic_scan,
+            args=(current_app._get_current_object(),)
+        )
+        scan_thread.daemon = True
+        scan_thread.start()
+        
+        return jsonify({
+            'status': 'Scan started',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'message': 'Automatic security scan triggered successfully'
+        }), 200
+    except Exception as e:
+        current_app.logger.error(f'Failed to trigger scan: {str(e)}')
+        return jsonify({'error': f'Failed to start scan: {str(e)}'}), 500
+
 
 @bp.route('/', methods=['GET'])
 def root():
@@ -68,6 +130,9 @@ def root():
     """
     # Get current user from Easy Auth
     current_user = get_easy_auth_user()
+    
+    # Load automatic scan results if available
+    automatic_scan = load_automatic_scan_results()
     
     # Count impossible logins from memory
     impossible_count = len([log for log in scan_results['signin_logs'] 
@@ -97,7 +162,8 @@ def root():
                          correlated_mfa_events=scan_results.get('correlated_mfa_events', []),
                          last_scan=scan_results['last_scan'],
                          current_mode=current_mode,
-                         using_mock=session.get('use_mock_data', False))
+                         using_mock=session.get('use_mock_data', False),
+                         automatic_scan=automatic_scan)
 
 
 @bp.route('/securityscan-dashboard', methods=['GET'])
@@ -130,13 +196,9 @@ def get_groups():
         department_keywords = current_app.config.get('DEPARTMENT_KEYWORDS', None)
         exclude_dashes = current_app.config.get('EXCLUDE_GROUPS_WITH_DASHES', False)
         
-        # Filter to show mail-enabled groups (same as what appears in Outlook)
-        # This includes both Microsoft 365 groups and distribution lists
+        # Show all groups (mail-enabled or security-only)
         formatted_groups = []
         for g in groups:
-            # Must be mail-enabled (has an email address)
-            if not g.get('mail') or not g.get('mailEnabled'):
-                continue
             
             display_name = g.get('displayName', 'Unknown')
             display_lower = display_name.lower()
@@ -177,11 +239,32 @@ def get_groups():
             if member_count == 0:
                 continue
             
-            # Add to results - only main department groups with members
+            # Determine group type for display
+            group_types = g.get('groupTypes', [])
+            mail_enabled = g.get('mailEnabled', False)
+            security_enabled = g.get('securityEnabled', False)
+            
+            # Filter to show only security-enabled OR mail-enabled groups
+            if not security_enabled and not mail_enabled:
+                continue
+            
+            if 'Unified' in group_types:
+                group_type = 'Microsoft 365'
+            elif mail_enabled and security_enabled:
+                group_type = 'Mail-enabled Security'
+            elif mail_enabled:
+                group_type = 'Distribution'
+            elif security_enabled:
+                group_type = 'Security'
+            else:
+                group_type = 'Other'
+            
+            # Add to results with group type
             formatted_groups.append({
                 'id': g.get('id'),
                 'displayName': display_name,
                 'mail': g.get('mail', ''),
+                'groupType': group_type,
                 'securityEnabled': g.get('securityEnabled', False),
                 'memberCount': member_count
             })
@@ -433,7 +516,7 @@ def scan_entra():
             
             for user in target_users:
                 try:
-                    logs = graph_client.fetch_signin_logs(hours_back=24, max_results=1000, user_principal_name=user)
+                    logs = graph_client.fetch_signin_logs(hours_back=168, max_results=1000, user_principal_name=user)
                     
                     if logs is None:
                         # API call failed
@@ -489,6 +572,14 @@ def scan_entra():
         mfa_change_times = set()
         correlated_mfa_events = []
         
+        # Build set of scanned user emails for filtering
+        scanned_user_emails = set()
+        for user_data in scan_results.get('scanned_users', []):
+            if isinstance(user_data, dict):
+                scanned_user_emails.add(user_data.get('email', '').lower())
+            elif isinstance(user_data, str):
+                scanned_user_emails.add(user_data.lower())
+        
         try:
             if not use_mock_data:
                 audit_logs = graph_client.fetch_audit_logs(hours_back=168)
@@ -514,6 +605,10 @@ def scan_entra():
                         target_user = 'Unknown'
                         if target_resources:
                             target_user = target_resources[0].get('userPrincipalName', 'Unknown')
+                        
+                        # FILTER: Only include MFA events for users that were scanned
+                        if target_user.lower() not in scanned_user_emails:
+                            continue
                         
                         # Extract who initiated
                         initiated_by = audit.get('initiatedBy', {}) or {}
@@ -788,25 +883,37 @@ def analyze_impossible_travel(signin_logs):
                     f"Trusted location identified for {user}: {coords} ({count} logins)"
                 )
     
-    # Sort by time
-    sorted_logs = sorted(signin_logs, key=lambda x: x.get('createdDateTime', ''))
+    # Group sign-ins by user to prevent cross-user comparisons
+    user_signin_groups = {}
+    for log in signin_logs:
+        user = log.get('userPrincipalName', '')
+        if user:
+            if user not in user_signin_groups:
+                user_signin_groups[user] = []
+            user_signin_groups[user].append(log)
     
-    for i in range(1, len(sorted_logs)):
-        current = sorted_logs[i]
-        previous = sorted_logs[i-1]
+    # Analyze each user's sign-ins separately
+    for user, user_logs in user_signin_groups.items():
+        # Sort this user's logs by time
+        sorted_user_logs = sorted(user_logs, key=lambda x: x.get('createdDateTime', ''))
         
-        current_loc = current.get('location', {})
-        previous_loc = previous.get('location', {})
-        
-        # Get coordinates
-        curr_lat = current_loc.get('geoCoordinates', {}).get('latitude')
-        curr_lon = current_loc.get('geoCoordinates', {}).get('longitude')
-        prev_lat = previous_loc.get('geoCoordinates', {}).get('latitude')
-        prev_lon = previous_loc.get('geoCoordinates', {}).get('longitude')
-        
-        # Get countries
-        curr_country = current_loc.get('countryOrRegion', '')
-        prev_country = previous_loc.get('countryOrRegion', '')
+        # Compare consecutive sign-ins for this user only
+        for i in range(1, len(sorted_user_logs)):
+            current = sorted_user_logs[i]
+            previous = sorted_user_logs[i-1]
+            
+            current_loc = current.get('location', {})
+            previous_loc = previous.get('location', {})
+            
+            # Get coordinates
+            curr_lat = current_loc.get('geoCoordinates', {}).get('latitude')
+            curr_lon = current_loc.get('geoCoordinates', {}).get('longitude')
+            prev_lat = previous_loc.get('geoCoordinates', {}).get('latitude')
+            prev_lon = previous_loc.get('geoCoordinates', {}).get('longitude')
+            
+            # Get countries
+            curr_country = current_loc.get('countryOrRegion', '')
+            prev_country = previous_loc.get('countryOrRegion', '')
         
         # Skip if coordinates missing
         if not all([curr_lat, curr_lon, prev_lat, prev_lon]):
@@ -956,6 +1063,73 @@ def report_findings():
     """
     flash('Report feature - will integrate with SharePoint in future', 'info')
     return redirect(url_for('main.root'))
+
+
+@bp.route('/scan-usage', methods=['GET'])
+def scan_usage():
+    """
+    Display automatic scan API usage tracking.
+    """
+    import json
+    from pathlib import Path
+    from datetime import datetime
+    
+    usage_file = Path(__file__).parent.parent / 'automatic_scan_usage.json'
+    
+    if usage_file.exists():
+        try:
+            with open(usage_file, 'r') as f:
+                usage_data = json.load(f)
+        except:
+            usage_data = {'scans': [], 'daily_totals': {}, 'monthly_totals': {}, 'all_time_total': 0}
+    else:
+        usage_data = {'scans': [], 'daily_totals': {}, 'monthly_totals': {}, 'all_time_total': 0}
+    
+    # Get current month and today totals
+    today = datetime.now().strftime('%Y-%m-%d')
+    current_month = datetime.now().strftime('%Y-%m')
+    
+    today_total = usage_data.get('daily_totals', {}).get(today, 0)
+    current_month_total = usage_data.get('monthly_totals', {}).get(current_month, 0)
+    
+    # Build monthly breakdown
+    monthly_breakdown = []
+    for month, calls in sorted(usage_data.get('monthly_totals', {}).items(), reverse=True):
+        # Count scans in this month
+        month_scans = [s for s in usage_data.get('scans', []) if s.get('timestamp', '')[:7] == month]
+        estimated_scans = len(month_scans)
+        avg_calls = round(calls / estimated_scans, 1) if estimated_scans > 0 else 0
+        
+        monthly_breakdown.append({
+            'month': month,
+            'calls': calls,
+            'estimated_scans': estimated_scans,
+            'avg_calls': avg_calls
+        })
+    
+    # Get recent scans (last 20)
+    recent_scans = []
+    for scan in reversed(usage_data.get('scans', [])[-20:]):
+        try:
+            dt = datetime.fromisoformat(scan.get('timestamp', ''))
+            formatted_time = dt.strftime('%Y-%m-%d %I:%M:%S %p')
+        except:
+            formatted_time = scan.get('timestamp', 'Unknown')
+        
+        recent_scans.append({
+            'timestamp': formatted_time,
+            'api_calls': scan.get('api_calls', 0),
+            'users_scanned': scan.get('users_scanned', 0),
+            'signin_events': scan.get('signin_events', 0),
+            'alerts': scan.get('alerts', 0)
+        })
+    
+    return render_template('scan_usage.html',
+                         usage_data=usage_data,
+                         today_total=today_total,
+                         current_month_total=current_month_total,
+                         monthly_breakdown=monthly_breakdown,
+                         recent_scans=recent_scans)
 
 
 @bp.route('/mfa-monitoring', methods=['GET'])
