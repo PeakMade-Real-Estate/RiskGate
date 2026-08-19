@@ -106,14 +106,6 @@
         </div>
 
         <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; height: 80px; gap: 20px;">
-            {% if current_user %}
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div style="text-align: right;">
-                    <div style="color: white; font-size: 0.9rem; font-weight: 600;">{{ current_user.display_name }}</div>
-                    <div style="color: rgba(255,255,255,0.8); font-size: 0.75rem;">{{ current_user.email }}</div>
-                </div>
-            </div>
-            {% endif %}
             <img src="{{ url_for('static', filename='Redpoint_logo.png') }}" alt="Redpoint Logo" style="height: 32px; width: auto;">
         </div>
 
@@ -121,7 +113,13 @@
 </header>
 
 {% if current_user %}
-<div style="background: white; padding: 10px 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-bottom: 1px solid #e0e0e0;">
+<div style="background: white; padding: 10px 40px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-bottom: 1px solid #e0e0e0; display: flex; justify-content: space-between; align-items: center;">
+    <div style="display: flex; align-items: center; gap: 10px;">
+        <div>
+            <div style="color: #333; font-size: 0.95rem; font-weight: 600;">{{ current_user.display_name }}</div>
+            <div style="color: #666; font-size: 0.8rem;">{{ current_user.email }}</div>
+        </div>
+    </div>
     <a href="/.auth/logout?post_logout_redirect_uri=/" 
        class="btn btn-sm btn-outline-danger" 
        style="border-radius: 6px; padding: 6px 16px; font-size: 0.85rem;"
