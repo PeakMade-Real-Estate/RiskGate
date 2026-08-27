@@ -26,7 +26,7 @@ def perform_automatic_scan(app):
         from app.models_new import ScanRun, UserIdentity, EntraSignInEvent, EntraSecurityAlert
         from app import db
         from app.graph_client import GraphClient
-        from app.risk_detection import analyze_impossible_travel
+        from app.routes import analyze_impossible_travel
         import json
         
         # Get scan target from configuration
@@ -47,8 +47,7 @@ def perform_automatic_scan(app):
             target_type=target_type,
             target_value=target_value,
             started_at=datetime.utcnow(),
-            status='running',
-            data_source='graph_api'
+            status='running'
         )
         db.session.add(scan_run)
         db.session.commit()
@@ -111,15 +110,34 @@ def perform_automatic_scan(app):
             
             # Scan each user
             all_signin_logs = []
-            users_scanned = 0
+            users_scanned = len(target_users)
+            users_with_activity = 0
+            batched_signin_logs = None
+
+            if target_type in ('group', 'all_users'):
+                # Fetch the tenant's recent sign-ins once, then filter locally.
+                batched_signin_logs = graph_client.fetch_signin_logs(
+                    hours_back=24, max_results=10000
+                )
+                logs_by_user = {}
+                for log in batched_signin_logs:
+                    logs_by_user.setdefault(log.get('userPrincipalName'), []).append(log)
             
             for user in target_users:
                 try:
-                    logs = graph_client.fetch_signin_logs(hours_back=24, max_results=1000, user_principal_name=user)
+                    logs = (
+                        logs_by_user.get(user, [])
+                        if batched_signin_logs is not None
+                        else graph_client.fetch_signin_logs(
+                            hours_back=24,
+                            max_results=1000,
+                            user_principal_name=user
+                        )
+                    )
                     
                     if logs:
                         all_signin_logs.extend(logs)
-                        users_scanned += 1
+                        users_with_activity += 1
                         
                         # Save signin events to database
                         for log in logs:
@@ -143,6 +161,7 @@ def perform_automatic_scan(app):
                                         last_seen_at=datetime.utcnow()
                                     )
                                     db.session.add(user_identity)
+                                    db.session.flush()
                                 else:
                                     user_identity.last_seen_at = datetime.utcnow()
                                 
@@ -152,8 +171,7 @@ def perform_automatic_scan(app):
                                 # Create signin event
                                 signin_event = EntraSignInEvent(
                                     microsoft_event_id=log.get('id'),
-                                    entra_user_id=log.get('userId'),
-                                    user_principal_name=log.get('userPrincipalName'),
+                                    user_id=user_identity.id,
                                     created_at=datetime.fromisoformat(log.get('createdDateTime', '').replace('Z', '+00:00')),
                                     ip_address=log.get('ipAddress'),
                                     country=location.get('countryOrRegion'),
@@ -181,7 +199,10 @@ def perform_automatic_scan(app):
             
             # Analyze for impossible travel
             logger.info(f"Analyzing {len(all_signin_logs)} sign-in events for impossible travel...")
-            print(f"[SCAN] Analyzing {len(all_signin_logs)} sign-in events from {users_scanned} users...")
+            print(
+                f"[SCAN] Analyzing {len(all_signin_logs)} sign-in events from "
+                f"{users_with_activity} users with activity ({users_scanned} group members checked)..."
+            )
             
             # Show sample sign-in events
             if all_signin_logs:
@@ -241,8 +262,7 @@ def perform_automatic_scan(app):
                     
                     # Create security alert
                     alert = EntraSecurityAlert(
-                        entra_user_id=event.entra_user_id,
-                        user_principal_name=event.user_principal_name,
+                        user_id=event.user_id,
                         alert_type='impossible_login',
                         severity='critical' if event.required_travel_speed_mph > 1000 else 'high',
                         reason=f"Impossible travel detected: {event.required_travel_speed_mph:.0f} mph required",
@@ -260,13 +280,17 @@ def perform_automatic_scan(app):
             scan_run.status = 'completed'
             scan_run.users_scanned = users_scanned
             scan_run.signin_events_found = len(all_signin_logs)
-            scan_run.impossible_logins_detected = len(impossible_logins)
             scan_run.alerts_created = alerts_created
             db.session.commit()
             
-            logger.info(f"Automatic scan completed - {users_scanned} users, {len(all_signin_logs)} events, {len(impossible_logins)} impossible logins")
+            logger.info(
+                f"Automatic scan completed - {users_scanned} users checked, "
+                f"{users_with_activity} with activity, {len(all_signin_logs)} events, "
+                f"{len(impossible_logins)} impossible logins"
+            )
             print(f"\n[SCAN] ✓ Scan completed successfully")
-            print(f"[SCAN]   Users scanned: {users_scanned}")
+            print(f"[SCAN]   Users checked: {users_scanned}")
+            print(f"[SCAN]   Users with activity: {users_with_activity}")
             print(f"[SCAN]   Sign-in events: {len(all_signin_logs)}")
             print(f"[SCAN]   Impossible logins: {len(impossible_logins)}")
             print(f"[SCAN]   Alerts created: {alerts_created}\n")
@@ -295,8 +319,8 @@ def start_scheduler(app):
     # Create scheduler
     scheduler = BackgroundScheduler()
     
-    # Get interval from config (default: 6 hours)
-    interval_hours = app.config.get('SCHEDULER_INTERVAL_HOURS', 6)
+    # Get interval from config (default: 1 hour)
+    interval_hours = app.config.get('SCHEDULER_INTERVAL_HOURS', 1)
     
     # Add job to run automatic scans
     scheduler.add_job(

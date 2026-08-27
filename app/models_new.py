@@ -9,6 +9,40 @@ SecurityScan is a monitoring and alerting layer.
 """
 from datetime import datetime
 from app import db
+from sqlalchemy.ext.hybrid import hybrid_property
+
+DATABASE_SCHEMA = 'riskgate'
+
+
+class UserLinkedMixin:
+    """Keep Entra-facing attributes while storing the database user_id."""
+
+    @hybrid_property
+    def entra_user_id(self):
+        return self.user.entra_user_id if self.user else getattr(self, '_entra_user_id', None)
+
+    @entra_user_id.setter
+    def entra_user_id(self, value):
+        self._entra_user_id = value
+        user_identity = UserIdentity.query.filter_by(entra_user_id=value).first()
+        if user_identity:
+            self.user_id = user_identity.id
+
+    @entra_user_id.expression
+    def entra_user_id(cls):
+        return db.select(UserIdentity.entra_user_id).where(
+            UserIdentity.id == cls.user_id
+        ).scalar_subquery()
+
+    @property
+    def user_principal_name(self):
+        return self.user.user_principal_name if self.user else getattr(
+            self, '_user_principal_name', None
+        )
+
+    @user_principal_name.setter
+    def user_principal_name(self, value):
+        self._user_principal_name = value
 
 
 class UserIdentity(db.Model):
@@ -17,7 +51,7 @@ class UserIdentity(db.Model):
     Maps to Azure AD users for tracking and correlation.
     """
     __tablename__ = 'user_identity'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     entra_user_id = db.Column(db.String(100), unique=True, nullable=False, index=True)  # Azure AD object ID
@@ -39,7 +73,7 @@ class UserIdentity(db.Model):
         return f'<UserIdentity {self.user_principal_name}>'
 
 
-class EntraSignInEvent(db.Model):
+class EntraSignInEvent(UserLinkedMixin, db.Model):
     """
     Represents a sign-in event from Microsoft Entra ID sign-in logs.
     Ingested from Microsoft Graph API.
@@ -47,12 +81,11 @@ class EntraSignInEvent(db.Model):
     Includes both Microsoft's risk assessment and local risk analysis.
     """
     __tablename__ = 'entra_signin_event'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     microsoft_event_id = db.Column(db.String(100), unique=True, nullable=False, index=True)  # Prevents duplicates
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     
     # Location data
@@ -77,7 +110,6 @@ class EntraSignInEvent(db.Model):
     # Microsoft risk assessment
     risk_level_aggregated = db.Column(db.String(50))  # none, low, medium, high
     risk_detail = db.Column(db.String(50))  # anonymizedIPAddress, maliciousIP, impossibleTravel, etc.
-    conditional_access_status = db.Column(db.String(50))
     
     # Local SecurityScan analysis
     local_risk_score = db.Column(db.Integer, default=0, index=True)
@@ -95,7 +127,7 @@ class EntraSignInEvent(db.Model):
         return f'<EntraSignInEvent {self.user_principal_name} at {self.created_at}>'
 
 
-class EntraMfaEvent(db.Model):
+class EntraMfaEvent(UserLinkedMixin, db.Model):
     """
     Represents an MFA/authentication method change from Microsoft Entra audit logs.
     
@@ -103,12 +135,11 @@ class EntraMfaEvent(db.Model):
     An attacker who successfully logs in often adds their own MFA method.
     """
     __tablename__ = 'entra_mfa_event'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
     microsoft_event_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'), nullable=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     
     # Event details from Microsoft audit log
@@ -129,7 +160,7 @@ class EntraMfaEvent(db.Model):
     
     # Risk context at time of event
     risk_score_at_time = db.Column(db.Integer)  # User's risk score when this happened
-    related_recent_signin_id = db.Column(db.Integer, db.ForeignKey('entra_signin_event.id'))  # Most recent sign-in
+    related_recent_signin_id = db.Column(db.Integer, db.ForeignKey('riskgate.entra_signin_event.id'))  # Most recent sign-in
     
     # Raw data
     raw_json = db.Column(db.Text)
@@ -138,7 +169,7 @@ class EntraMfaEvent(db.Model):
         return f'<EntraMfaEvent {self.activity_name} for {self.user_principal_name}>'
 
 
-class UserAuthMethodSnapshot(db.Model):
+class UserAuthMethodSnapshot(UserLinkedMixin, db.Model):
     """
     Represents the current authentication methods registered for a user.
     Fetched from Microsoft Graph /users/{id}/authentication/methods.
@@ -146,11 +177,10 @@ class UserAuthMethodSnapshot(db.Model):
     Helps track which methods exist and when they were added.
     """
     __tablename__ = 'user_auth_method_snapshot'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'), nullable=False, index=True)
     
     method_id = db.Column(db.String(100), unique=True, index=True)  # Microsoft's method ID
     method_type = db.Column(db.String(100))  # microsoftAuthenticator, phoneNumber, email, fido2, etc.
@@ -166,7 +196,7 @@ class UserAuthMethodSnapshot(db.Model):
         return f'<UserAuthMethodSnapshot {self.method_type} for {self.user_principal_name}>'
 
 
-class UserTrustedLocation(db.Model):
+class UserTrustedLocation(UserLinkedMixin, db.Model):
     """
     Tracks baseline/trusted locations for each user.
     Used to prevent false positives for remote workers who consistently log in from home.
@@ -174,11 +204,10 @@ class UserTrustedLocation(db.Model):
     A location becomes \"trusted\" after a user successfully logs in from it multiple times.
     """
     __tablename__ = 'user_trusted_location'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'), nullable=False, index=True)
     
     # Location data (approximate - within ~50 miles)
     country = db.Column(db.String(100), nullable=False, index=True)
@@ -199,18 +228,17 @@ class UserTrustedLocation(db.Model):
         return f'<UserTrustedLocation {self.user_principal_name} @ {self.location_name} ({self.login_count} logins)>'
 
 
-class UserRiskState(db.Model):
+class UserRiskState(UserLinkedMixin, db.Model):
     """
     Tracks the current risk state of a user.
     Updated whenever new risk signals are detected.
     """
     __tablename__ = 'user_risk_state'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), 
-                              unique=True, nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'),
+                        unique=True, nullable=False, index=True)
     
     current_risk_score = db.Column(db.Integer, default=0, index=True)
     current_risk_level = db.Column(db.String(50), default='low')  # low, medium, high, critical
@@ -226,7 +254,7 @@ class UserRiskState(db.Model):
         return f'<UserRiskState {self.user_principal_name} score={self.current_risk_score}>'
 
 
-class EntraSecurityAlert(db.Model):
+class EntraSecurityAlert(UserLinkedMixin, db.Model):
     """
     Security alerts generated by SecurityScan analysis.
     
@@ -238,11 +266,10 @@ class EntraSecurityAlert(db.Model):
     - Temporary Access Pass created after risk event
     """
     __tablename__ = 'entra_security_alert'
-    __table_args__ = {'extend_existing': True}
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
     
     id = db.Column(db.Integer, primary_key=True)
-    entra_user_id = db.Column(db.String(100), db.ForeignKey('user_identity.entra_user_id'), nullable=False, index=True)
-    user_principal_name = db.Column(db.String(255), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('riskgate.user_identity.id'), nullable=False, index=True)
     
     alert_type = db.Column(db.String(100), nullable=False, index=True)
     # Types: impossible_login, extreme_impossible_login, mfa_change_after_risky_login,
@@ -258,8 +285,8 @@ class EntraSecurityAlert(db.Model):
     resolution_notes = db.Column(db.Text)
     
     # Related events
-    related_signin_event_id = db.Column(db.Integer, db.ForeignKey('entra_signin_event.id'))
-    related_mfa_event_id = db.Column(db.Integer, db.ForeignKey('entra_mfa_event.id'))
+    related_signin_event_id = db.Column(db.Integer, db.ForeignKey('riskgate.entra_signin_event.id'))
+    related_mfa_event_id = db.Column(db.Integer, db.ForeignKey('riskgate.entra_mfa_event.id'))
     
     # Relationships
     related_signin = db.relationship('EntraSignInEvent', foreign_keys=[related_signin_event_id])
@@ -267,3 +294,29 @@ class EntraSecurityAlert(db.Model):
     
     def __repr__(self):
         return f'<EntraSecurityAlert {self.alert_type} for {self.user_principal_name}>'
+
+
+class ScanRun(db.Model):
+    """Records the status and summary of an automatic security scan."""
+    __tablename__ = 'scan_run'
+    __table_args__ = {'schema': DATABASE_SCHEMA, 'extend_existing': True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    scan_type = db.Column(db.String(50), nullable=False)
+    target_type = db.Column(db.String(50), nullable=False)
+    target_value = db.Column(db.String(255))
+    started_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)
+    status = db.Column(db.String(50), nullable=False, default='running')
+    users_scanned = db.Column(db.Integer)
+    events_found = db.Column(db.Integer)
+    alerts_created = db.Column(db.Integer)
+    error_message = db.Column(db.Text)
+
+    @property
+    def signin_events_found(self):
+        return self.events_found
+
+    @signin_events_found.setter
+    def signin_events_found(self, value):
+        self.events_found = value

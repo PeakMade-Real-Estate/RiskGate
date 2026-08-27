@@ -12,6 +12,7 @@ Required Microsoft Graph API permissions:
 - User.Read.All (user details)
 """
 import os
+from urllib.parse import quote_plus
 from datetime import timedelta
 from dotenv import load_dotenv
 
@@ -28,12 +29,38 @@ class Config:
     # Secret key for session management and CSRF protection
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
-    # Database configuration
-    database_url = os.environ.get('DATABASE_URL')
+    # Database configuration. DATABASE_URL and DB_APP_SUPPORT may contain a
+    # complete SQLAlchemy URL; otherwise the endpoint settings below are used.
+    database_url = os.environ.get('DATABASE_URL') or os.environ.get('DB_APP_SUPPORT')
+    DB_SERVER = os.environ.get(
+        'DB_SERVER',
+        'ttjaz2xgixiuvfh7f2ptn64ewu-ynsidiusyneera6uwsrg6s666m.database.fabric.microsoft.com',
+    )
+    DB_PORT = int(os.environ.get('DB_PORT', '1433'))
+    DB_NAME = os.environ.get(
+        'DB_NAME',
+        'DB_App_Support-d2f340d0-c476-4450-9c61-c29ca544bf37',
+    )
+    DB_DRIVER = os.environ.get('DB_DRIVER', 'ODBC Driver 18 for SQL Server')
+    DB_AUTHENTICATION = os.environ.get('DB_AUTHENTICATION', 'managed_identity')
+    DB_ACCESS_TOKEN_SCOPE = os.environ.get(
+        'DB_ACCESS_TOKEN_SCOPE', 'https://database.windows.net/.default'
+    )
+    DISPLAY_TIMEZONE = os.environ.get('DISPLAY_TIMEZONE', 'America/Chicago')
+    SCHEDULER_TARGET_TYPE = os.environ.get('SCHEDULER_TARGET_TYPE', 'group')
+    SCHEDULER_TARGET_VALUE = os.environ.get('SCHEDULER_TARGET_VALUE', '')
+    SCHEDULER_INTERVAL_HOURS = int(os.environ.get('SCHEDULER_INTERVAL_HOURS', '1'))
+    STALE_SCAN_HOURS = int(os.environ.get('STALE_SCAN_HOURS', '2'))
     if database_url:
         # Azure PostgreSQL fix: postgres:// -> postgresql://
         if database_url.startswith('postgres://'):
             database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        SQLALCHEMY_DATABASE_URI = database_url
+    elif os.environ.get('DB_SERVER') or os.environ.get('DB_NAME'):
+        database_url = (
+            f'mssql+pyodbc://@{DB_SERVER}:{DB_PORT}/{quote_plus(DB_NAME)}'
+            f'?driver={quote_plus(DB_DRIVER)}'
+        )
         SQLALCHEMY_DATABASE_URI = database_url
     else:
         # Use SQLite for local development
@@ -118,6 +145,7 @@ class Config:
     # Department keyword filter - only show groups containing these words
     # Set to None to disable keyword filtering
     DEPARTMENT_KEYWORDS = [
+        'all', 'associates', 'company', 'everyone',  # Company-wide groups
         'technology', 'tech', 'it',
         'accounting', 'finance',
         'development', 'dev',

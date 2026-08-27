@@ -31,6 +31,8 @@ class GraphClient:
         self.client_secret = os.environ.get('AZURE_CLIENT_SECRET')
         self.access_token = None
         self.token_expires_at = None
+        self.api_calls = 0  # Track API calls for credit usage
+        self.reset_call_counter()
         
     def _get_access_token(self):
         """
@@ -113,6 +115,7 @@ class GraphClient:
         try:
             response = requests.get(url, headers=headers, params=params, timeout=300)
             response.raise_for_status()
+            self.api_calls += 1  # Increment API call counter
             return response.json()
         except requests.exceptions.Timeout as e:
             current_app.logger.error(f"Graph API TIMEOUT for {url}: Query took longer than 300 seconds")
@@ -126,6 +129,14 @@ class GraphClient:
         except Exception as e:
             current_app.logger.error(f"Graph API request failed for {url}: {e}")
             return None
+    
+    def reset_call_counter(self):
+        """Reset the API call counter."""
+        self.api_calls = 0
+    
+    def get_call_count(self):
+        """Get the number of API calls made since last reset."""
+        return self.api_calls
     
     def fetch_signin_logs(self, hours_back=24, max_results=1000, user_principal_name=None):
         """
@@ -151,7 +162,7 @@ class GraphClient:
         url = "https://graph.microsoft.com/v1.0/auditLogs/signIns"
         params = {
             '$filter': ' and '.join(filter_parts),
-            '$top': max_results
+            '$top': min(max_results, 1000)
             # Removed orderby to avoid timeout issues
         }
         
@@ -160,18 +171,34 @@ class GraphClient:
             current_app.logger.info(f"Filtering for user: {user_principal_name}")
         current_app.logger.info(f"Graph API filter: {params['$filter']}")
         
-        result = self._make_request(url, params)
-        if result and 'value' in result:
-            signin_logs = result['value']
-            current_app.logger.info(f"Fetched {len(signin_logs)} sign-in log entries")
-            if signin_logs:
-                # Log sample of users found
-                sample_users = set([log.get('userPrincipalName', 'Unknown')[:50] for log in signin_logs[:5]])
-                current_app.logger.info(f"Sample users in logs: {sample_users}")
-            return signin_logs
-        
-        current_app.logger.warning(f"No sign-in logs retrieved. Result: {result}")
-        return []
+        signin_logs = []
+        page = 0
+        while url and len(signin_logs) < max_results:
+            page += 1
+            result = self._make_request(
+                url, params if page == 1 else None
+            )
+            if not result or 'value' not in result:
+                if not signin_logs:
+                    current_app.logger.warning(
+                        f"No sign-in logs retrieved. Result: {result}"
+                    )
+                break
+
+            remaining = max_results - len(signin_logs)
+            signin_logs.extend(result['value'][:remaining])
+            url = result.get('@odata.nextLink')
+
+        current_app.logger.info(
+            f"Fetched {len(signin_logs)} sign-in log entries across {page} page(s)"
+        )
+        if signin_logs:
+            sample_users = {
+                log.get('userPrincipalName', 'Unknown')[:50]
+                for log in signin_logs[:5]
+            }
+            current_app.logger.info(f"Sample users in logs: {sample_users}")
+        return signin_logs
     
     def fetch_audit_logs(self, hours_back=24, category='UserManagement', max_results=1000):
         """
@@ -256,10 +283,10 @@ class GraphClient:
     
     def fetch_groups(self, max_results=999):
         """
-        Fetch all groups from Microsoft Entra.
+        Fetch all groups from Microsoft Entra with pagination support.
         
         Args:
-            max_results: Maximum number of groups to fetch (default 999)
+            max_results: Maximum number of groups to fetch per page (default 999)
         
         Returns:
             List of group objects with id, displayName, mail, etc.
@@ -272,14 +299,27 @@ class GraphClient:
         
         current_app.logger.info("Fetching groups from Entra ID...")
         
-        result = self._make_request(url, params)
-        if result and 'value' in result:
-            groups = result['value']
-            current_app.logger.info(f"Fetched {len(groups)} groups")
-            return groups
+        all_groups = []
+        page_count = 0
         
-        current_app.logger.warning("No groups retrieved")
-        return []
+        while url:
+            page_count += 1
+            result = self._make_request(url, params if page_count == 1 else None)
+            
+            if not result or 'value' not in result:
+                current_app.logger.warning("No groups retrieved")
+                break
+            
+            groups = result['value']
+            all_groups.extend(groups)
+            
+            # Check for next page
+            url = result.get('@odata.nextLink')
+            if url:
+                current_app.logger.info(f"Fetching page {page_count + 1} of groups...")
+        
+        current_app.logger.info(f"Fetched {len(all_groups)} total groups across {page_count} page(s)")
+        return all_groups
     
     def get_group_member_count(self, group_id):
         """
@@ -311,7 +351,7 @@ class GraphClient:
     
     def fetch_group_members(self, group_id):
         """
-        Fetch all members of a specific group.
+        Fetch all members of a specific group with pagination support.
         
         Args:
             group_id: Entra group ID
@@ -321,21 +361,35 @@ class GraphClient:
         """
         url = f"https://graph.microsoft.com/v1.0/groups/{group_id}/members"
         params = {
-            '$select': 'id,userPrincipalName,displayName,mail,accountEnabled'
+            '$select': 'id,userPrincipalName,displayName,mail,accountEnabled',
+            '$top': 999  # Request up to 999 members per page
         }
         
         current_app.logger.info(f"Fetching members for group {group_id}...")
         
-        result = self._make_request(url, params)
-        if result and 'value' in result:
+        all_users = []
+        page_count = 0
+        
+        while url:
+            page_count += 1
+            result = self._make_request(url, params if page_count == 1 else None)
+            
+            if not result or 'value' not in result:
+                current_app.logger.warning(f"Could not fetch members for group {group_id}")
+                break
+            
             members = result['value']
             # Filter to only users (not nested groups or other objects)
             users = [m for m in members if m.get('@odata.type') == '#microsoft.graph.user' or 'userPrincipalName' in m]
-            current_app.logger.info(f"Group has {len(users)} user members")
-            return users
+            all_users.extend(users)
+            
+            # Check for next page
+            url = result.get('@odata.nextLink')
+            if url:
+                current_app.logger.info(f"Fetching page {page_count + 1} of group members...")
         
-        current_app.logger.warning(f"Could not fetch members for group {group_id}")
-        return []
+        current_app.logger.info(f"Group has {len(all_users)} total user members across {page_count} page(s)")
+        return all_users
 
 
 # Global instance

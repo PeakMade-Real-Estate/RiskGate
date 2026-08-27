@@ -3,12 +3,28 @@ Application routes - with Microsoft Graph API integration (in-memory storage).
 """
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, current_app, jsonify
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 import requests
 import os
 from app.graph_client import GraphClient
 from app.mock_data import generate_mock_signin_logs, get_mock_users, get_mock_groups, get_mock_group_members, MOCK_GROUPS
 
 bp = Blueprint('main', __name__)
+
+
+def format_scan_time(value):
+    """Format a UTC database timestamp in the configured display timezone."""
+    if not value:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    try:
+        display_timezone = ZoneInfo(current_app.config.get(
+            'DISPLAY_TIMEZONE', 'America/Chicago'
+        ))
+    except Exception:
+        display_timezone = timezone.utc
+    return value.astimezone(display_timezone).strftime('%Y-%m-%d %I:%M:%S %p %Z')
 
 
 def get_easy_auth_user():
@@ -60,21 +76,57 @@ scan_results = {
     'users_without_activity': []  # Users with no sign-ins in the period
 }
 
-def load_automatic_scan_results():
-    """Load automatic scan results from JSON file if it exists."""
-    import json
-    from pathlib import Path
-    
-    results_file = Path(__file__).parent.parent / 'automatic_scan_results.json'
-    
-    if results_file.exists():
-        try:
-            with open(results_file, 'r') as f:
-                return json.load(f)
-        except Exception as e:
-            current_app.logger.error(f"Failed to load automatic scan results: {e}")
+def load_latest_automatic_scan():
+    """Load the latest automatic scan summary from the riskgate database."""
+    try:
+        from app import db
+        from app.models_new import ScanRun
+
+        scan = (
+            ScanRun.query
+            .filter_by(scan_type='automatic')
+            .order_by(ScanRun.started_at.desc())
+            .first()
+        )
+        if not scan:
             return None
-    return None
+
+        completed_at = scan.completed_at or scan.started_at
+        status = scan.status
+        if status == 'running' and scan.started_at:
+            started_at = scan.started_at
+            if started_at.tzinfo is None:
+                started_at = started_at.replace(tzinfo=timezone.utc)
+            age_hours = (
+                datetime.now(timezone.utc) - started_at
+            ).total_seconds() / 3600
+            if age_hours > current_app.config.get('STALE_SCAN_HOURS', 2):
+                status = 'stale'
+        return {
+            'scan_type': scan.scan_type,
+            'status': status,
+            'target_type': scan.target_type,
+            'target_value': scan.target_value,
+            'started_at': scan.started_at.isoformat() if scan.started_at else None,
+            'completed_at': scan.completed_at.isoformat() if scan.completed_at else None,
+            'last_scan': format_scan_time(completed_at),
+            'users_scanned': scan.users_scanned or 0,
+            'signin_events': scan.events_found or 0,
+            'impossible_logins': 0,
+            'alerts_created': scan.alerts_created or 0,
+            'alerts': [],
+        }
+    except Exception as error:
+        current_app.logger.warning('Unable to load automatic scan from database: %s', error)
+        return None
+
+
+@bp.route('/api/automatic-scan-status', methods=['GET'])
+def automatic_scan_status():
+    """Return the latest persisted automatic scan for dashboard refreshes."""
+    response = jsonify(load_latest_automatic_scan())
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @bp.route('/api/trigger-scan', methods=['POST'])
@@ -131,8 +183,8 @@ def root():
     # Get current user from Easy Auth
     current_user = get_easy_auth_user()
     
-    # Load automatic scan results if available
-    automatic_scan = load_automatic_scan_results()
+    # Load the latest automatic scan from the database.
+    automatic_scan = load_latest_automatic_scan()
     
     # Count impossible logins from memory
     impossible_count = len([log for log in scan_results['signin_logs'] 
@@ -234,10 +286,9 @@ def get_groups():
                 if not any(keyword in display_lower for keyword in department_keywords):
                     continue
             
-            # Check member count - exclude groups with zero members
-            member_count = graph_client.get_group_member_count(g.get('id'))
-            if member_count == 0:
-                continue
+            # Member counts are loaded when a group is selected. Avoid one
+            # extra Graph request per group while building the list.
+            member_count = None
             
             # Determine group type for display
             group_types = g.get('groupTypes', [])
@@ -507,46 +558,37 @@ def scan_entra():
             use_mock_data = False
             graph_client = GraphClient()
             
-            # Fetch sign-in logs for each target user
+            # Fetch the sign-in window once, then filter locally by target user.
             current_app.logger.info(f"Scanning Entra ID for {len(target_users)} user(s)...")
             
-            api_failures = []
             users_with_activity = []
             users_without_activity = []
-            
-            for user in target_users:
-                try:
-                    logs = graph_client.fetch_signin_logs(hours_back=168, max_results=1000, user_principal_name=user)
-                    
-                    if logs is None:
-                        # API call failed
-                        api_failures.append(user)
-                        current_app.logger.error(f"API call failed for {user}")
-                    elif len(logs) > 0:
-                        # User has activity
-                        all_signin_logs.extend(logs)
-                        users_with_activity.append(user)
-                        current_app.logger.info(f"Retrieved {len(logs)} sign-in logs for {user}")
-                    else:
-                        # User has no activity (empty list is valid)
-                        users_without_activity.append(user)
-                        current_app.logger.info(f"No sign-in activity for {user} in last 24 hours")
-                        
-                except Exception as e:
-                    api_failures.append(user)
-                    current_app.logger.error(f"Error fetching logs for {user}: {e}")
-                    continue
-            
-            # Only error if ALL users had API failures
-            if api_failures and not all_signin_logs and not users_without_activity:
-                current_app.logger.error(f"Graph API failed for all users: {api_failures}")
+
+            fetched_signin_logs = graph_client.fetch_signin_logs(
+                hours_back=168,
+                max_results=10000,
+            )
+            if fetched_signin_logs is None:
+                current_app.logger.error("Graph API failed while fetching sign-in logs")
                 flash(f'⚠️ Microsoft Graph API failed. Check permissions and retry.', 'warning')
                 return redirect(url_for('main.root'))
+
+            logs_by_user = {}
+            for log in fetched_signin_logs:
+                logs_by_user.setdefault(log.get('userPrincipalName'), []).append(log)
+
+            for user in target_users:
+                logs = logs_by_user.get(user, [])
+                if logs:
+                    all_signin_logs.extend(logs)
+                    users_with_activity.append(user)
+                else:
+                    users_without_activity.append(user)
             
             # Log summary
             current_app.logger.info(f"Scan complete: {len(users_with_activity)} users with activity, "
                                   f"{len(users_without_activity)} users without activity, "
-                                  f"{len(api_failures)} API failures")
+                                  f"1 batched Graph request")
             
             if users_without_activity:
                 current_app.logger.info(f"Users with no sign-ins: {', '.join(users_without_activity)}")
@@ -776,6 +818,11 @@ def scan_entra():
                 # Convert timestamp to EST
                 'time': convert_to_est(log.get('createdDateTime', 'N/A')),
                 'user': log.get('userPrincipalName', 'N/A'),
+                'interaction_type': (
+                    'Interactive' if log.get('isInteractive') is True
+                    else 'Non-interactive' if log.get('isInteractive') is False
+                    else 'Unknown'
+                ),
                 'location': location_str,
                 'device': f"{device.get('operatingSystem', 'Unknown')} / {device.get('browser', 'Unknown')}",
                 'ip_address': log.get('ipAddress', 'N/A'),

@@ -152,7 +152,6 @@ def ingest_signin_event(signin_record):
             mfa_satisfied=mfa_satisfied,
             risk_level_aggregated=risk_level,
             risk_detail=risk_detail,
-            conditional_access_status=conditional_access,
             raw_json=json.dumps(signin_record)
         )
         

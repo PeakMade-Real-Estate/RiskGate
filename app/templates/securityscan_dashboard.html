@@ -103,6 +103,91 @@
     <form id="clearForm" method="POST" action="{{ url_for('main.clear_scan') }}" style="display: none;">
     </form>
 
+    <!-- Automatic Scan Results Section -->
+    {% if automatic_scan %}
+    <div class="card shadow-sm mb-2" id="automaticScanSection">
+        <div class="card-header" style="background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%); color: white; padding: 6px 12px;">
+            <small class="mb-0" style="font-weight: 600;">
+                <i class="fas fa-robot me-1"></i>Last Automatic Scan
+            </small>
+        </div>
+        <div class="card-body p-2">
+            <div class="row">
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Target</small>
+                    <div style="font-weight: 600; font-size: 0.85rem;">
+                        <span id="automaticScanTarget">{{ automatic_scan.target_value or 'All Users' }}</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Status</small>
+                    <div style="font-weight: 600; font-size: 0.85rem;">
+                        <span id="automaticScanStatus">{{ automatic_scan.status|capitalize }}</span>
+                        <small id="automaticScanTime" class="text-muted d-block">{{ automatic_scan.last_scan }}</small>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Users Checked</small>
+                    <div style="font-weight: 600; font-size: 0.85rem;">
+                        <i class="fas fa-users me-1"></i><span id="automaticScanUsers">{{ automatic_scan.users_scanned }}</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Sign-in Events</small>
+                    <div style="font-weight: 600; font-size: 0.85rem;">
+                        <i class="fas fa-sign-in-alt me-1"></i><span id="automaticScanEvents">{{ automatic_scan.signin_events }}</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Impossible Travel</small>
+                    <div style="font-weight: 600; font-size: 0.85rem; color: {% if automatic_scan.impossible_logins > 0 %}#dc3545{% else %}#28a745{% endif %};">
+                        <i class="fas fa-plane me-1"></i><span id="automaticScanImpossible">{{ automatic_scan.impossible_logins }}</span>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <small class="text-muted" style="font-size: 0.7rem;">Alerts Created</small>
+                    <div style="font-weight: 600; font-size: 0.85rem; color: {% if automatic_scan.alerts_created > 0 %}#dc3545{% else %}#28a745{% endif %};">
+                        <i class="fas fa-exclamation-triangle me-1"></i><span id="automaticScanAlerts">{{ automatic_scan.alerts_created }}</span>
+                    </div>
+                </div>
+            </div>
+            {% if automatic_scan.alerts %}
+            <div class="mt-2">
+                <small class="text-muted" style="font-size: 0.7rem;">Recent Alerts from Automatic Scan:</small>
+                <div class="table-responsive" style="max-height: 200px; overflow-y: auto;">
+                    <table class="table table-sm mb-0" style="font-size: 0.75rem;">
+                        <thead style="background-color: #f8f9fa; position: sticky; top: 0;">
+                            <tr>
+                                <th style="padding: 3px 6px;">User</th>
+                                <th style="padding: 3px 6px;">Locations</th>
+                                <th style="padding: 3px 6px;">Distance</th>
+                                <th style="padding: 3px 6px;">Speed Required</th>
+                                <th style="padding: 3px 6px;">Severity</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for alert in automatic_scan.alerts[:10] %}
+                            <tr>
+                                <td style="padding: 3px 6px;">{{ alert.user.split('@')[0] }}</td>
+                                <td style="padding: 3px 6px;">{{ alert.locations }}</td>
+                                <td style="padding: 3px 6px;">{{ alert.distance_miles|round(1) }} mi</td>
+                                <td style="padding: 3px 6px;"><strong style="color: #dc3545;">{{ alert.required_speed_mph|round(0) }} mph</strong></td>
+                                <td style="padding: 3px 6px;">
+                                    <span class="badge {% if alert.severity == 'critical' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size: 0.7rem;">
+                                        {{ alert.severity|upper }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
 
     <!-- Recent Scan Results / Alerts Section -->
     {% if recent_alerts %}
@@ -346,63 +431,60 @@
     <div class="card shadow-sm mt-2" id="allSignInLogsSection">
         <div class="card-header d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%); color: white; padding: 6px 12px;">
             <small class="mb-0" style="font-weight: 600;">
-                <i class="fas fa-list me-1"></i>All Sign-In Activity ({{ total_signin_count }} events)
+                <i class="fas fa-list me-1"></i>Sign-In Activity ({{ total_signin_count }} events)
             </small>
             <button class="btn btn-sm btn-light" style="font-size: 0.7rem; padding: 2px 8px;" type="button" data-bs-toggle="collapse" data-bs-target="#signinLogsCollapse" aria-expanded="true" aria-controls="signinLogsCollapse">
                 <i class="fas fa-chevron-down"></i> Show/Hide
             </button>
         </div>
         <div class="collapse show" id="signinLogsCollapse">
-            <div class="card-body p-0">
-                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
-                    <table class="table table-sm table-hover mb-0" style="font-size: 0.7rem;">
-                        <thead style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 10;">
-                            <tr>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Time</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">User</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Location</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Device</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">IP Address</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Application</th>
-                                <th scope="col" style="padding: 3px 4px; font-weight: 600; font-size: 0.7rem;">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% set current_user = '' %}
-                            {% for log in all_signin_logs %}
-                                {# Add visual separator when user changes #}
-                                {% if log.user != current_user and not loop.first %}
-                                <tr style="height: 3px; background-color: #e9ecef;">
-                                    <td colspan="7" style="padding: 0; border-top: 2px solid #dee2e6;"></td>
-                                </tr>
-                                {% endif %}
-                                {% set current_user = log.user %}
-                                
-                                <tr {% if log.is_impossible %}style="background-color: #ffe6e6; border-left: 3px solid #dc3545;"{% endif %}>
-                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.time }}</td>
-                                    <td style="padding: 3px 4px; font-size: 0.68rem;">
-                                        <strong>{{ log.user.split('@')[0] }}</strong>
-                                    </td>
-                                    <td style="padding: 3px 4px; font-size: 0.68rem;">
-                                        <i class="fas fa-map-marker-alt me-1" style="color: {% if log.is_impossible %}#dc3545{% else %}#6c757d{% endif %}; font-size: 0.65rem;"></i>
-                                        {{ log.location }}
-                                    </td>
-                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.device }}</td>
-                                    <td style="padding: 3px 4px; font-family: monospace; font-size: 0.65rem;">{{ log.ip_address }}</td>
-                                    <td style="padding: 3px 4px; font-size: 0.68rem;">{{ log.app }}</td>
-                                    <td style="padding: 3px 4px;">
-                                        {% if log.is_impossible %}
-                                            <span class="badge bg-danger" style="font-size: 0.65rem;">⚠️ IMPOSSIBLE</span>
-                                        {% elif log.status == 0 %}
-                                            <span class="badge bg-success" style="font-size: 0.65rem;">✓ Success</span>
+            <div class="card-body p-2">
+                <div class="row g-2">
+                    {% for interaction_type in ['Interactive', 'Non-interactive'] %}
+                    <div class="col-lg-6">
+                        <div class="border rounded h-100">
+                            <div class="px-2 py-1 bg-light border-bottom fw-semibold" style="font-size: 0.75rem;">
+                                <i class="fas {% if interaction_type == 'Interactive' %}fa-user{% else %}fa-cog{% endif %} me-1"></i>
+                                {{ interaction_type }} ({{ all_signin_logs|selectattr('interaction_type', 'equalto', interaction_type)|list|length }})
+                            </div>
+                            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                <table class="table table-sm table-hover mb-0" style="font-size: 0.7rem;">
+                                    <thead style="background-color: #f8f9fa; position: sticky; top: 0; z-index: 10;">
+                                        <tr>
+                                            <th style="padding: 3px 4px;">Time</th>
+                                            <th style="padding: 3px 4px;">User</th>
+                                            <th style="padding: 3px 4px;">Location</th>
+                                            <th style="padding: 3px 4px;">Device</th>
+                                            <th style="padding: 3px 4px;">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% set logs_for_type = all_signin_logs|selectattr('interaction_type', 'equalto', interaction_type)|list %}
+                                        {% for log in logs_for_type %}
+                                        <tr {% if log.is_impossible %}style="background-color: #ffe6e6; border-left: 3px solid #dc3545;"{% endif %}>
+                                            <td style="padding: 3px 4px;">{{ log.time }}</td>
+                                            <td style="padding: 3px 4px;"><strong>{{ log.user.split('@')[0] }}</strong></td>
+                                            <td style="padding: 3px 4px;">{{ log.location }}</td>
+                                            <td style="padding: 3px 4px;">{{ log.device }}</td>
+                                            <td style="padding: 3px 4px;">
+                                                {% if log.is_impossible %}
+                                                    <span class="badge bg-danger">Impossible</span>
+                                                {% elif log.status == 0 %}
+                                                    <span class="badge bg-success">Success</span>
+                                                {% else %}
+                                                    <span class="badge bg-warning">Failed</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
                                         {% else %}
-                                            <span class="badge bg-warning" style="font-size: 0.65rem;">Failed</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                                        <tr><td colspan="5" class="text-muted text-center py-3">No {{ interaction_type|lower }} sign-ins</td></tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
@@ -449,8 +531,12 @@
                     <!-- Group Tab -->
                     <div class="tab-pane fade" id="group-pane" role="tabpanel">
                         <div class="mb-3">
-                            <label for="groupInput" class="form-label">Entra Group Name</label>
-                            <input type="text" class="form-control" id="groupInput" placeholder="Type group name here...">
+                            <label for="groupSearch" class="form-label">Entra Group Name</label>
+                            <input type="text" class="form-control mb-2" id="groupSearch" placeholder="Type to search groups..." oninput="filterGroups()">
+                            <select class="form-select" id="groupSelect" size="8" onchange="loadGroupMembers()" style="cursor: pointer;">
+                                <option value="">Loading groups...</option>
+                            </select>
+                            <small class="text-muted">Type to search, then select a group to scan all its members</small>
                             <div id="groupMemberInfo" class="mt-2 d-none">
                                 <small class="text-muted d-block mb-2">
                                     <i class="fas fa-users me-1"></i>
@@ -529,6 +615,202 @@ let scanProgressMessages = [
 let currentMessageIndex = 0;
 let progressInterval = null;
 let currentGroupId = null;
+let allGroups = []; // Store all groups
+
+// Wait for DOM to load before attaching event listeners
+document.addEventListener('DOMContentLoaded', function() {
+    // Load groups when modal is opened
+    const modal = document.getElementById('userSelectorModal');
+    if (modal) {
+        modal.addEventListener('show.bs.modal', function () {
+            // Clear search input
+            const searchInput = document.getElementById('groupSearch');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            loadGroupsDropdown();
+        });
+    }
+});
+
+function loadGroupsDropdown() {
+    const groupSelect = document.getElementById('groupSelect');
+    groupSelect.innerHTML = '<option value="">Loading groups...</option>';
+    
+    fetch('{{ url_for("main.get_groups") }}')
+        .then(response => response.json())
+        .then(data => {
+            allGroups = data.groups || [];
+            
+            if (allGroups.length === 0) {
+                groupSelect.innerHTML = '<option value="">No groups found</option>';
+                return;
+            }
+            
+            // Sort groups alphabetically
+            allGroups.sort((a, b) => a.displayName.localeCompare(b.displayName));
+            
+            // Populate dropdown
+            groupSelect.innerHTML = '<option value="">-- Select a group --</option>';
+            allGroups.forEach(group => {
+                const option = document.createElement('option');
+                option.value = group.id;
+                option.textContent = `${group.displayName} (${group.groupType}) - select to load members`;
+                option.dataset.displayName = group.displayName;
+                option.dataset.groupType = group.groupType;
+                groupSelect.appendChild(option);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading groups:', error);
+            groupSelect.innerHTML = '<option value="">Error loading groups</option>';
+        });
+}
+
+function filterGroups() {
+    const searchInput = document.getElementById('groupSearch');
+    const groupSelect = document.getElementById('groupSelect');
+    const searchTerm = searchInput.value.toLowerCase();
+    const exactMatch = allGroups.find(group => group.displayName.toLowerCase() === searchTerm.trim());
+    
+    // Clear and repopulate dropdown based on filter
+    groupSelect.innerHTML = '<option value="">-- Select a group --</option>';
+    
+    allGroups.forEach(group => {
+        const displayText = `${group.displayName} (${group.groupType}) - select to load members`;
+        
+        // Show group if it matches search term (or if search is empty)
+        if (!searchTerm || displayText.toLowerCase().includes(searchTerm)) {
+            const option = document.createElement('option');
+            option.value = group.id;
+            option.textContent = displayText;
+            option.dataset.displayName = group.displayName;
+            option.dataset.groupType = group.groupType;
+            groupSelect.appendChild(option);
+        }
+    });
+
+    if (exactMatch) {
+        const exactOption = Array.from(groupSelect.options).find(
+            option => option.value === exactMatch.id
+        );
+        if (exactOption) {
+            groupSelect.value = exactMatch.id;
+            loadGroupMembers();
+            return;
+        }
+    }
+    
+    // If only one match (plus the "Select" option), auto-select it
+    if (groupSelect.options.length === 2 && searchTerm) {
+        groupSelect.selectedIndex = 1;
+        loadGroupMembers();
+    }
+}
+    async function refreshAutomaticScanStatus() {
+        try {
+            const response = await fetch('{{ url_for("main.automatic_scan_status") }}', {
+                cache: 'no-store'
+            });
+            if (!response.ok) {
+                return;
+            }
+            const scan = await response.json();
+            if (!scan) {
+                return;
+            }
+
+            const fields = {
+                automaticScanTarget: scan.target_value || 'All Users',
+                automaticScanStatus: (scan.status || '').charAt(0).toUpperCase() + (scan.status || '').slice(1),
+                automaticScanTime: scan.last_scan || '',
+                automaticScanUsers: scan.users_scanned ?? 0,
+                automaticScanEvents: scan.signin_events ?? 0,
+                automaticScanImpossible: scan.impossible_logins ?? 0,
+                automaticScanAlerts: scan.alerts_created ?? 0
+            };
+
+            Object.entries(fields).forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.textContent = value;
+                }
+            });
+        } catch (error) {
+            console.debug('Automatic scan status refresh failed', error);
+        }
+    }
+
+    setInterval(refreshAutomaticScanStatus, 30000);
+    document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+            refreshAutomaticScanStatus();
+        }
+    });
+
+function loadGroupMembers() {
+    const groupSelect = document.getElementById('groupSelect');
+    const selectedGroupId = groupSelect.value;
+    
+    // Hide previous results
+    document.getElementById('groupMemberInfo').classList.add('d-none');
+    document.getElementById('groupErrorInfo').classList.add('d-none');
+    
+    if (!selectedGroupId) {
+        currentGroupId = null;
+        return;
+    }
+    
+    currentGroupId = selectedGroupId;
+    
+    // Fetch members
+    fetch(`{{ url_for('main.get_group_members', group_id='GROUP_ID') }}`.replace('GROUP_ID', selectedGroupId))
+        .then(response => response.json())
+        .then(data => {
+            const memberCount = data.members.length;
+            document.getElementById('memberCountText').textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
+            const selectedOption = groupSelect.options[groupSelect.selectedIndex];
+            const selectedGroup = allGroups.find(group => group.id === selectedGroupId);
+            if (selectedOption && selectedGroup) {
+                selectedOption.textContent = `${selectedGroup.displayName} (${selectedGroup.groupType}) - ${memberCount} members`;
+            }
+            
+            // Populate member list
+            const memberListElement = document.getElementById('memberList');
+            if (memberCount === 0) {
+                memberListElement.innerHTML = '<small class="text-muted">No members found</small>';
+            } else {
+                // Sort members by display name or email
+                const sortedMembers = data.members.sort((a, b) => {
+                    const nameA = a.displayName || a.userPrincipalName || '';
+                    const nameB = b.displayName || b.userPrincipalName || '';
+                    return nameA.localeCompare(nameB);
+                });
+                
+                // Create list of members
+                let memberHTML = '<ul class="list-unstyled mb-0" style="font-size: 0.85rem;">';
+                sortedMembers.forEach(member => {
+                    const displayName = member.displayName || 'Unknown';
+                    const email = member.userPrincipalName || member.mail || '';
+                    memberHTML += `<li class="py-1">
+                        <i class="fas fa-user me-2" style="color: #6c757d; font-size: 0.7rem;"></i>
+                        <strong>${displayName}</strong>
+                        ${email ? `<br><small class="text-muted ms-3">${email}</small>` : ''}
+                    </li>`;
+                });
+                memberHTML += '</ul>';
+                memberListElement.innerHTML = memberHTML;
+            }
+            
+            document.getElementById('groupMemberInfo').classList.remove('d-none');
+        })
+        .catch(error => {
+            console.error('Error loading members:', error);
+            document.getElementById('groupErrorText').textContent = 'Error loading group members';
+            document.getElementById('groupErrorInfo').classList.remove('d-none');
+            currentGroupId = null;
+        });
+}
 
 function showSpinner() {
     // Clear previous scan results immediately
@@ -609,6 +891,11 @@ function checkGroupMembers() {
             
             const memberCount = data.members.length;
             document.getElementById('memberCountText').textContent = `${memberCount} member${memberCount !== 1 ? 's' : ''}`;
+            const selectedOption = groupSelect.options[groupSelect.selectedIndex];
+            const selectedGroup = allGroups.find(group => group.id === currentGroupId);
+            if (selectedOption && selectedGroup) {
+                selectedOption.textContent = `${selectedGroup.displayName} (${selectedGroup.groupType}) - ${memberCount} members`;
+            }
             
             // Populate member list
             const memberListElement = document.getElementById('memberList');
@@ -661,18 +948,22 @@ function applySelection() {
         document.getElementById('targetValue').value = userInput;
         document.getElementById('targetDisplay').textContent = userInput;
     } else {
-        // Group mode - use the group ID if available, otherwise the group name
-        const groupInput = document.getElementById('groupInput').value.trim();
+        // Group mode - use the selected group
+        const groupSelect = document.getElementById('groupSelect');
+        const selectedGroupId = groupSelect.value;
         
-        if (!groupInput) {
-            alert('Please enter a group name');
+        if (!selectedGroupId) {
+            alert('Please select a group');
             return;
         }
         
+        const selectedOption = groupSelect.options[groupSelect.selectedIndex];
+        const groupDisplayName = selectedOption.dataset.displayName;
+        const groupType = selectedOption.dataset.groupType;
+        
         document.getElementById('scanType').value = 'group';
-        // Use the group ID if we've looked it up, otherwise use the name (backend will search)
-        document.getElementById('targetValue').value = currentGroupId || groupInput;
-        document.getElementById('targetDisplay').textContent = groupInput + ' (Group)';
+        document.getElementById('targetValue').value = selectedGroupId;
+        document.getElementById('targetDisplay').textContent = `${groupDisplayName} (${groupType})`;
     }
     
     // Reset impossible logins count to 0
@@ -713,36 +1004,11 @@ function applySelection() {
     modal.hide();
 }
 
-// Add event listener for auto-search on group input
-let searchTimeout = null;
-document.addEventListener('DOMContentLoaded', function() {
-    const groupInput = document.getElementById('groupInput');
-    if (groupInput) {
-        // Auto-search as user types (with debouncing)
-        groupInput.addEventListener('input', function() {
-            // Clear previous timeout
-            if (searchTimeout) {
-                clearTimeout(searchTimeout);
-            }
-            
-            // Set new timeout to search after 500ms of no typing
-            searchTimeout = setTimeout(() => {
-                checkGroupMembers();
-            }, 500);
-        });
-        
-        // Also support Enter key
-        groupInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                if (searchTimeout) {
-                    clearTimeout(searchTimeout);
-                }
-                checkGroupMembers();
-            }
-        });
-    }
-});
+// Deprecated function - kept for compatibility
+function checkGroupMembers() {
+    loadGroupMembers();
+}
+
 </script>
 
 {% endblock %}
