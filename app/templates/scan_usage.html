@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Automatic Scan Usage - RiskGate{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row mb-3">
+        <div class="col">
+            <h4><i class="fas fa-chart-line me-2"></i>Automatic Scan Usage Tracking</h4>
+            <p class="text-muted small">API call tracking for automatic security scans</p>
+        </div>
+        <div class="col-auto">
+            <a href="{{ url_for('main.root') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">All-Time Total</h6>
+                    <h3 class="mb-0"><i class="fas fa-infinity me-2 text-primary"></i>{{ usage_data.all_time_total }}</h3>
+                    <small class="text-muted">API calls</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">This Month</h6>
+                    <h3 class="mb-0"><i class="fas fa-calendar-alt me-2 text-success"></i>{{ current_month_total }}</h3>
+                    <small class="text-muted">API calls</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Today</h6>
+                    <h3 class="mb-0"><i class="fas fa-clock me-2 text-info"></i>{{ today_total }}</h3>
+                    <small class="text-muted">API calls</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card">
+                <div class="card-body">
+                    <h6 class="card-subtitle mb-2 text-muted">Total Scans</h6>
+                    <h3 class="mb-0"><i class="fas fa-search me-2 text-warning"></i>{{ usage_data.scans|length }}</h3>
+                    <small class="text-muted">Executions</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Monthly Breakdown -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-calendar me-2"></i>Monthly API Usage</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Month</th>
+                            <th>API Calls</th>
+                            <th>Estimated Scans</th>
+                            <th>Avg Calls/Scan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for month in monthly_breakdown|reverse %}
+                        <tr>
+                            <td>{{ month.month }}</td>
+                            <td><strong>{{ month.calls }}</strong></td>
+                            <td>{{ month.estimated_scans }}</td>
+                            <td>{{ month.avg_calls }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Scans -->
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>Recent Automatic Scans (Last 20)</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>API Calls</th>
+                            <th>Users Scanned</th>
+                            <th>Sign-in Events</th>
+                            <th>Alerts Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scan in recent_scans %}
+                        <tr>
+                            <td>{{ scan.timestamp }}</td>
+                            <td><span class="badge bg-primary">{{ scan.api_calls }}</span></td>
+                            <td>{{ scan.users_scanned }}</td>
+                            <td>{{ scan.signin_events }}</td>
+                            <td>
+                                {% if scan.alerts > 0 %}
+                                <span class="badge bg-danger">{{ scan.alerts }}</span>
+                                {% else %}
+                                <span class="badge bg-success">0</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes -->
+    <div class="alert alert-info mt-4">
+        <h6><i class="fas fa-info-circle me-2"></i>About API Usage</h6>
+        <ul class="mb-0 small">
+            <li><strong>Microsoft Graph API calls are typically FREE</strong> with Azure AD Premium or Microsoft 365 E3/E5 licenses</li>
+            <li>Rate limits apply: 2,000 requests per second per application</li>
+            <li>Average automatic scan uses ~3 API calls (auth + group members + sign-in logs)</li>
+            <li>Hourly scans = ~72 calls/day, ~2,160 calls/month</li>
+        </ul>
+    </div>
+</div>
+{% endblock %}

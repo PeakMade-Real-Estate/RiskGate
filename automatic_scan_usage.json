@@ -1,0 +1,25 @@
+{
+  "scans": [
+    {
+      "timestamp": "2026-08-17T13:31:56.337622",
+      "api_calls": 3,
+      "users_scanned": 261,
+      "signin_events": 989,
+      "alerts": 0
+    },
+    {
+      "timestamp": "2026-08-17T14:58:32.864564",
+      "api_calls": 3,
+      "users_scanned": 258,
+      "signin_events": 984,
+      "alerts": 0
+    }
+  ],
+  "daily_totals": {
+    "2026-08-17": 6
+  },
+  "monthly_totals": {
+    "2026-08": 6
+  },
+  "all_time_total": 6
+}

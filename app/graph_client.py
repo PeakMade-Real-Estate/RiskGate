@@ -154,17 +154,24 @@ class GraphClient:
         filter_time = datetime.utcnow() - timedelta(hours=hours_back)
         filter_time_str = filter_time.strftime('%Y-%m-%dT%H:%M:%SZ')
         
-        # Build filter - add user filter if specified
-        filter_parts = [f"createdDateTime ge {filter_time_str}"]
+        # Graph defaults to interactive user sign-ins. Explicitly request both
+        # user event types so non-interactive records reach the dashboard.
+        filter_parts = [
+            f"createdDateTime ge {filter_time_str}",
+            "signInEventTypes/any(t: t eq 'interactiveUser' or t eq 'nonInteractiveUser')"
+        ]
         if user_principal_name:
             filter_parts.append(f"userPrincipalName eq '{user_principal_name}'")
         
-        url = "https://graph.microsoft.com/v1.0/auditLogs/signIns"
+        # signInEventTypes filtering is available through the beta sign-in API.
+        url = "https://graph.microsoft.com/beta/auditLogs/signIns"
         params = {
             '$filter': ' and '.join(filter_parts),
-            '$top': min(max_results, 1000)
+            '$top': min(max_results, 1000),
+            '$count': 'true'
             # Removed orderby to avoid timeout issues
         }
+        advanced_query_headers = {'ConsistencyLevel': 'eventual'}
         
         current_app.logger.info(f"Fetching sign-in logs from last {hours_back} hours...")
         if user_principal_name:
@@ -176,7 +183,9 @@ class GraphClient:
         while url and len(signin_logs) < max_results:
             page += 1
             result = self._make_request(
-                url, params if page == 1 else None
+                url,
+                params if page == 1 else None,
+                extra_headers=advanced_query_headers
             )
             if not result or 'value' not in result:
                 if not signin_logs:

@@ -538,12 +538,9 @@
                             </select>
                             <small class="text-muted">Type to search, then select a group to scan all its members</small>
                             <div id="groupMemberInfo" class="mt-2 d-none">
-                                <small class="text-muted d-block mb-2">
+                                <div class="alert alert-info mb-0 py-2">
                                     <i class="fas fa-users me-1"></i>
-                                    <span id="memberCountText">0 members</span>
-                                </small>
-                                <div id="memberList" class="border rounded p-2" style="max-height: 200px; overflow-y: auto; background-color: #f8f9fa;">
-                                    <!-- Member list will be populated here -->
+                                    This group contains <strong id="memberCountText">0 members</strong>.
                                 </div>
                             </div>
                             <div id="groupErrorInfo" class="mt-2 d-none">
@@ -775,33 +772,6 @@ function loadGroupMembers() {
                 selectedOption.textContent = `${selectedGroup.displayName} (${selectedGroup.groupType}) - ${memberCount} members`;
             }
             
-            // Populate member list
-            const memberListElement = document.getElementById('memberList');
-            if (memberCount === 0) {
-                memberListElement.innerHTML = '<small class="text-muted">No members found</small>';
-            } else {
-                // Sort members by display name or email
-                const sortedMembers = data.members.sort((a, b) => {
-                    const nameA = a.displayName || a.userPrincipalName || '';
-                    const nameB = b.displayName || b.userPrincipalName || '';
-                    return nameA.localeCompare(nameB);
-                });
-                
-                // Create list of members
-                let memberHTML = '<ul class="list-unstyled mb-0" style="font-size: 0.85rem;">';
-                sortedMembers.forEach(member => {
-                    const displayName = member.displayName || 'Unknown';
-                    const email = member.userPrincipalName || member.mail || '';
-                    memberHTML += `<li class="py-1">
-                        <i class="fas fa-user me-2" style="color: #6c757d; font-size: 0.7rem;"></i>
-                        <strong>${displayName}</strong>
-                        ${email ? `<br><small class="text-muted ms-3">${email}</small>` : ''}
-                    </li>`;
-                });
-                memberHTML += '</ul>';
-                memberListElement.innerHTML = memberHTML;
-            }
-            
             document.getElementById('groupMemberInfo').classList.remove('d-none');
         })
         .catch(error => {
@@ -896,34 +866,6 @@ function checkGroupMembers() {
             if (selectedOption && selectedGroup) {
                 selectedOption.textContent = `${selectedGroup.displayName} (${selectedGroup.groupType}) - ${memberCount} members`;
             }
-            
-            // Populate member list
-            const memberListElement = document.getElementById('memberList');
-            if (memberCount === 0) {
-                memberListElement.innerHTML = '<small class="text-muted">No members found</small>';
-            } else {
-                // Sort members by display name or email
-                const sortedMembers = data.members.sort((a, b) => {
-                    const nameA = a.displayName || a.userPrincipalName || '';
-                    const nameB = b.displayName || b.userPrincipalName || '';
-                    return nameA.localeCompare(nameB);
-                });
-                
-                // Create list of members
-                let memberHTML = '<ul class="list-unstyled mb-0" style="font-size: 0.85rem;">';
-                sortedMembers.forEach(member => {
-                    const displayName = member.displayName || 'Unknown';
-                    const email = member.userPrincipalName || member.mail || '';
-                    memberHTML += `<li class="py-1">
-                        <i class="fas fa-user me-2" style="color: #6c757d; font-size: 0.7rem;"></i>
-                        <strong>${displayName}</strong>
-                        ${email ? `<br><small class="text-muted ms-3">${email}</small>` : ''}
-                    </li>`;
-                });
-                memberHTML += '</ul>';
-                memberListElement.innerHTML = memberHTML;
-            }
-            
             document.getElementById('groupMemberInfo').classList.remove('d-none');
         })
         .catch(error => {
