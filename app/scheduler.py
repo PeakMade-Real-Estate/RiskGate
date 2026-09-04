@@ -125,6 +125,14 @@ def perform_automatic_scan(app):
 
             # Pre-load existing records in bulk instead of querying per event/user,
             # which previously caused hundreds of sequential round-trips to Fabric.
+            # IN-clause chunking avoids exceeding SQL Server's ~2100 parameter limit.
+            IN_CLAUSE_CHUNK_SIZE = 1000
+
+            def _chunked(items):
+                items = list(items)
+                for i in range(0, len(items), IN_CLAUSE_CHUNK_SIZE):
+                    yield items[i:i + IN_CLAUSE_CHUNK_SIZE]
+
             existing_events = {}
             user_identity_cache = {}
             if batched_signin_logs is not None:
@@ -132,18 +140,16 @@ def perform_automatic_scan(app):
                 entra_user_ids_to_check = {
                     log.get('userId') for log in batched_signin_logs if log.get('userId')
                 }
-                if event_ids_to_check:
-                    existing_events = {
-                        e.microsoft_event_id: e for e in EntraSignInEvent.query.filter(
-                            EntraSignInEvent.microsoft_event_id.in_(event_ids_to_check)
-                        ).all()
-                    }
-                if entra_user_ids_to_check:
-                    user_identity_cache = {
-                        ui.entra_user_id: ui for ui in UserIdentity.query.filter(
-                            UserIdentity.entra_user_id.in_(entra_user_ids_to_check)
-                        ).all()
-                    }
+                for chunk in _chunked(event_ids_to_check):
+                    for e in EntraSignInEvent.query.filter(
+                        EntraSignInEvent.microsoft_event_id.in_(chunk)
+                    ).all():
+                        existing_events[e.microsoft_event_id] = e
+                for chunk in _chunked(entra_user_ids_to_check):
+                    for ui in UserIdentity.query.filter(
+                        UserIdentity.entra_user_id.in_(chunk)
+                    ).all():
+                        user_identity_cache[ui.entra_user_id] = ui
 
             COMMIT_BATCH_SIZE = 25  # users processed per DB commit
             processed_since_commit = 0
