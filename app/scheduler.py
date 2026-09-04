@@ -122,7 +122,33 @@ def perform_automatic_scan(app):
                 logs_by_user = {}
                 for log in batched_signin_logs:
                     logs_by_user.setdefault(log.get('userPrincipalName'), []).append(log)
-            
+
+            # Pre-load existing records in bulk instead of querying per event/user,
+            # which previously caused hundreds of sequential round-trips to Fabric.
+            existing_events = {}
+            user_identity_cache = {}
+            if batched_signin_logs is not None:
+                event_ids_to_check = [log.get('id') for log in batched_signin_logs if log.get('id')]
+                entra_user_ids_to_check = {
+                    log.get('userId') for log in batched_signin_logs if log.get('userId')
+                }
+                if event_ids_to_check:
+                    existing_events = {
+                        e.microsoft_event_id: e for e in EntraSignInEvent.query.filter(
+                            EntraSignInEvent.microsoft_event_id.in_(event_ids_to_check)
+                        ).all()
+                    }
+                if entra_user_ids_to_check:
+                    user_identity_cache = {
+                        ui.entra_user_id: ui for ui in UserIdentity.query.filter(
+                            UserIdentity.entra_user_id.in_(entra_user_ids_to_check)
+                        ).all()
+                    }
+
+            COMMIT_BATCH_SIZE = 25  # users processed per DB commit
+            processed_since_commit = 0
+            pending_new_identity_ids = set()
+
             for user in target_users:
                 try:
                     logs = (
@@ -139,63 +165,74 @@ def perform_automatic_scan(app):
                         all_signin_logs.extend(logs)
                         users_with_activity += 1
                         
-                        # Save signin events to database
+                        # Save signin events to database using in-memory caches
                         for log in logs:
-                            # Check if this event already exists (prevent duplicates)
-                            existing = EntraSignInEvent.query.filter_by(
-                                microsoft_event_id=log.get('id')
-                            ).first()
-                            
-                            if not existing:
-                                # Get or create user identity
-                                user_identity = UserIdentity.query.filter_by(
-                                    entra_user_id=log.get('userId')
-                                ).first()
-                                
-                                if not user_identity:
-                                    user_identity = UserIdentity(
-                                        entra_user_id=log.get('userId'),
-                                        user_principal_name=log.get('userPrincipalName'),
-                                        display_name=log.get('userDisplayName'),
-                                        created_at=datetime.utcnow(),
-                                        last_seen_at=datetime.utcnow()
-                                    )
-                                    db.session.add(user_identity)
-                                    db.session.flush()
-                                else:
-                                    user_identity.last_seen_at = datetime.utcnow()
-                                
-                                # Extract location data
-                                location = log.get('location', {})
-                                
-                                # Create signin event
-                                signin_event = EntraSignInEvent(
-                                    microsoft_event_id=log.get('id'),
-                                    user_id=user_identity.id,
-                                    created_at=datetime.fromisoformat(log.get('createdDateTime', '').replace('Z', '+00:00')),
-                                    ip_address=log.get('ipAddress'),
-                                    country=location.get('countryOrRegion'),
-                                    state=location.get('state'),
-                                    city=location.get('city'),
-                                    latitude=location.get('geoCoordinates', {}).get('latitude'),
-                                    longitude=location.get('geoCoordinates', {}).get('longitude'),
-                                    browser=log.get('deviceDetail', {}).get('browser'),
-                                    operating_system=log.get('deviceDetail', {}).get('operatingSystem'),
-                                    device_id=log.get('deviceDetail', {}).get('deviceId'),
-                                    app_display_name=log.get('appDisplayName'),
-                                    status=log.get('status', {}).get('errorCode') == 0 and 'success' or 'failure',
-                                    risk_level_aggregated=log.get('riskLevelAggregated'),
-                                    risk_detail=log.get('riskDetail'),
-                                    raw_json=json.dumps(log)
+                            event_id = log.get('id')
+                            # Skip if this event already exists (prevent duplicates)
+                            if event_id in existing_events:
+                                continue
+
+                            # Get or create user identity from cache
+                            entra_user_id = log.get('userId')
+                            user_identity = user_identity_cache.get(entra_user_id)
+
+                            if not user_identity:
+                                user_identity = UserIdentity(
+                                    entra_user_id=entra_user_id,
+                                    user_principal_name=log.get('userPrincipalName'),
+                                    display_name=log.get('userDisplayName'),
+                                    created_at=datetime.utcnow(),
+                                    last_seen_at=datetime.utcnow()
                                 )
-                                db.session.add(signin_event)
-                        
-                        # Commit after each user to prevent data loss
+                                db.session.add(user_identity)
+                                user_identity_cache[entra_user_id] = user_identity
+                                pending_new_identity_ids.add(entra_user_id)
+                            else:
+                                user_identity.last_seen_at = datetime.utcnow()
+                            
+                            # Extract location data
+                            location = log.get('location', {})
+                            
+                            # Create signin event (relationship assignment resolves the FK at flush time)
+                            signin_event = EntraSignInEvent(
+                                microsoft_event_id=event_id,
+                                created_at=datetime.fromisoformat(log.get('createdDateTime', '').replace('Z', '+00:00')),
+                                ip_address=log.get('ipAddress'),
+                                country=location.get('countryOrRegion'),
+                                state=location.get('state'),
+                                city=location.get('city'),
+                                latitude=location.get('geoCoordinates', {}).get('latitude'),
+                                longitude=location.get('geoCoordinates', {}).get('longitude'),
+                                browser=log.get('deviceDetail', {}).get('browser'),
+                                operating_system=log.get('deviceDetail', {}).get('operatingSystem'),
+                                device_id=log.get('deviceDetail', {}).get('deviceId'),
+                                app_display_name=log.get('appDisplayName'),
+                                status=log.get('status', {}).get('errorCode') == 0 and 'success' or 'failure',
+                                risk_level_aggregated=log.get('riskLevelAggregated'),
+                                risk_detail=log.get('riskDetail'),
+                                raw_json=json.dumps(log)
+                            )
+                            signin_event.user = user_identity
+                            db.session.add(signin_event)
+                            existing_events[event_id] = signin_event
+
+                    processed_since_commit += 1
+                    if processed_since_commit >= COMMIT_BATCH_SIZE:
                         db.session.commit()
-                        
+                        processed_since_commit = 0
+                        pending_new_identity_ids.clear()
+
                 except Exception as e:
                     logger.error(f"Error scanning user {user}: {e}")
+                    db.session.rollback()
+                    for uid in pending_new_identity_ids:
+                        user_identity_cache.pop(uid, None)
+                    pending_new_identity_ids.clear()
+                    processed_since_commit = 0
                     continue
+
+            # Commit any remaining pending changes from the last partial batch
+            db.session.commit()
             
             # Analyze for impossible travel
             logger.info(f"Analyzing {len(all_signin_logs)} sign-in events for impossible travel...")
@@ -247,11 +284,14 @@ def perform_automatic_scan(app):
                 print(f"[SCAN] ✓ No impossible travel detected")
                 logger.info("No impossible travel detected")
             
-            # Update signin events with impossible travel detection
+            # Update signin events with impossible travel detection.
+            # Reuse the in-memory cache built during the scan loop above to avoid
+            # a per-item DB round trip; fall back to a query only if not cached.
             alerts_created = 0
             for impossible_login in impossible_logins:
-                event = EntraSignInEvent.query.filter_by(
-                    microsoft_event_id=impossible_login.get('id')
+                event_id = impossible_login.get('id')
+                event = existing_events.get(event_id) or EntraSignInEvent.query.filter_by(
+                    microsoft_event_id=event_id
                 ).first()
                 
                 if event:
