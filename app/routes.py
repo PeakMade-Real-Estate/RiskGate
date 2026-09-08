@@ -80,7 +80,7 @@ def load_latest_automatic_scan():
     """Load the latest automatic scan summary from the riskgate database."""
     try:
         from app import db
-        from app.models_new import ScanRun
+        from app.models_new import ScanRun, EntraSecurityAlert, UserIdentity
 
         scan = (
             ScanRun.query
@@ -102,6 +102,36 @@ def load_latest_automatic_scan():
             ).total_seconds() / 3600
             if age_hours > current_app.config.get('STALE_SCAN_HOURS', 2):
                 status = 'stale'
+
+        # Alerts have no direct FK back to the scan run, so correlate them by
+        # the time window the scan actually ran in (alerts are created and
+        # committed synchronously during that same run).
+        window_end = scan.completed_at or datetime.utcnow()
+        alert_rows = (
+            EntraSecurityAlert.query
+            .filter(
+                EntraSecurityAlert.alert_type == 'impossible_login',
+                EntraSecurityAlert.created_at >= scan.started_at,
+                EntraSecurityAlert.created_at <= window_end,
+            )
+            .order_by(EntraSecurityAlert.created_at.desc())
+            .all()
+        )
+        user_ids = {alert.user_id for alert in alert_rows}
+        users_by_id = {
+            u.id: u for u in UserIdentity.query.filter(UserIdentity.id.in_(user_ids)).all()
+        } if user_ids else {}
+        alerts = [
+            {
+                'user_principal_name': users_by_id[alert.user_id].user_principal_name
+                if alert.user_id in users_by_id else None,
+                'severity': alert.severity,
+                'reason': alert.reason,
+                'created_at': alert.created_at.isoformat() if alert.created_at else None,
+            }
+            for alert in alert_rows
+        ]
+
         return {
             'scan_type': scan.scan_type,
             'status': status,
@@ -112,13 +142,14 @@ def load_latest_automatic_scan():
             'last_scan': format_scan_time(completed_at),
             'users_scanned': scan.users_scanned or 0,
             'signin_events': scan.events_found or 0,
-            'impossible_logins': 0,
+            'impossible_logins': len(alert_rows),
             'alerts_created': scan.alerts_created or 0,
-            'alerts': [],
+            'alerts': alerts,
         }
     except Exception as error:
         current_app.logger.warning('Unable to load automatic scan from database: %s', error)
         return None
+
 
 
 @bp.route('/api/automatic-scan-status', methods=['GET'])
