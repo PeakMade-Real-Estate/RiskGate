@@ -992,144 +992,144 @@ def analyze_impossible_travel(signin_logs):
             # Get countries
             curr_country = current_loc.get('countryOrRegion', '')
             prev_country = previous_loc.get('countryOrRegion', '')
-        
-        # Skip if coordinates missing
-        if not all([curr_lat, curr_lon, prev_lat, prev_lon]):
-            continue
-        
-        # Calculate distance
-        distance_miles = calculate_distance(prev_lat, prev_lon, curr_lat, curr_lon)
-        
-        # Skip if same location (within 10 miles)
-        if distance_miles < 10:
-            continue
-        
-        # Calculate time difference
-        from dateutil import parser
-        curr_time = parser.parse(current.get('createdDateTime'))
-        prev_time = parser.parse(previous.get('createdDateTime'))
-        time_diff_hours = (curr_time - prev_time).total_seconds() / 3600
-        
-        # Avoid division by zero
-        if time_diff_hours < 0.01:  # Less than 36 seconds
-            time_diff_hours = 0.01
-        
-        # Calculate required speed
-        required_speed_mph = distance_miles / time_diff_hours
-        
-        # Check if same device was used (device-based trust)
-        # If the same physical device made both logins, it's likely the same person traveling
-        curr_device = current.get('deviceDetail', {})
-        prev_device = previous.get('deviceDetail', {})
-        curr_device_id = curr_device.get('deviceId')
-        prev_device_id = prev_device.get('deviceId')
-        
-        user = current.get('userPrincipalName', '')
-        
-        if curr_device_id and prev_device_id and curr_device_id == prev_device_id:
-            # Same device - suppress alert (legitimate travel with their device)
-            curr_city = current_loc.get('city', 'Unknown')
-            prev_city = previous_loc.get('city', 'Unknown')
-            device_name = f"{curr_device.get('operatingSystem', 'Unknown')} - {curr_device.get('browser', 'Unknown')}"
-            current_app.logger.info(
-                f"Suppressed travel alert for {user}: Same device used in both locations "
-                f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, device: {device_name})"
-            )
-            continue  # Skip flagging this as impossible travel
-        
-        # Check if either location is a trusted baseline for this user
-        curr_rounded = (round(curr_lat, 1), round(curr_lon, 1))
-        prev_rounded = (round(prev_lat, 1), round(prev_lon, 1))
-        
-        is_current_trusted = curr_rounded in trusted_locations.get(user, set())
-        is_previous_trusted = prev_rounded in trusted_locations.get(user, set())
-        
-        if is_current_trusted or is_previous_trusted:
-            # Suppress alert - user is returning to or leaving a trusted location
-            location_name = current_loc.get('city', current_loc.get('countryOrRegion', 'location'))
-            current_app.logger.info(
-                f"Suppressed travel alert for {user}: {location_name} is a trusted baseline location "
-                f"({required_speed_mph:.0f} mph would have triggered alert)"
-            )
-            continue  # Skip flagging this as impossible travel
-        
-        # Determine if domestic or international travel
-        is_domestic_us = (curr_country == 'US' and prev_country == 'US')
-        is_same_country = (curr_country == prev_country)
-        
-        # Apply different thresholds based on travel type
-        # Domestic US travel: Allow up to 1000 mph (cross-country flights, remote workers)
-        # International travel: Strict 500 mph threshold (likely compromise)
-        threshold = 1000 if is_domestic_us else 500
-        
-        # Determine risk level
-        if required_speed_mph > threshold:
-            travel_type = 'Domestic' if is_same_country else 'International'
             
-            # RISK COMBINATION DETECTION
-            # Only alert if impossible travel is combined with OTHER suspicious factors
-            risk_factors = []
+            # Skip if coordinates missing
+            if not all([curr_lat, curr_lon, prev_lat, prev_lon]):
+                continue
             
-            # Factor 1: Different device used (potential device compromise)
-            devices_differ = (curr_device_id and prev_device_id and curr_device_id != prev_device_id)
-            if devices_differ:
-                risk_factors.append('different_device')
+            # Calculate distance
+            distance_miles = calculate_distance(prev_lat, prev_lon, curr_lat, curr_lon)
             
-            # Factor 2: New location (never seen in user's history)
-            curr_city = current_loc.get('city', '')
-            is_new_location = curr_rounded not in user_locations.get(user, {})
-            if is_new_location and curr_city:  # Only count if we have city data
-                risk_factors.append('new_location')
+            # Skip if same location (within 10 miles)
+            if distance_miles < 10:
+                continue
             
-            # Factor 3: Extremely high speed (>10000 mph - physically impossible even with fast VPN)
-            is_extreme_speed = required_speed_mph > 10000
-            if is_extreme_speed:
-                risk_factors.append('extreme_speed')
+            # Calculate time difference
+            from dateutil import parser
+            curr_time = parser.parse(current.get('createdDateTime'))
+            prev_time = parser.parse(previous.get('createdDateTime'))
+            time_diff_hours = (curr_time - prev_time).total_seconds() / 3600
             
-            # Factor 4: International travel (higher risk than domestic)
-            if not is_same_country:
-                risk_factors.append('international')
+            # Avoid division by zero
+            if time_diff_hours < 0.01:  # Less than 36 seconds
+                time_diff_hours = 0.01
             
-            # Require at least 2 risk factors to trigger alert
-            # This filters out simple VPN switches and legitimate travel
-            if len(risk_factors) < 2:
+            # Calculate required speed
+            required_speed_mph = distance_miles / time_diff_hours
+            
+            # Check if same device was used (device-based trust)
+            # If the same physical device made both logins, it's likely the same person traveling
+            curr_device = current.get('deviceDetail', {})
+            prev_device = previous.get('deviceDetail', {})
+            curr_device_id = curr_device.get('deviceId')
+            prev_device_id = prev_device.get('deviceId')
+            
+            user = current.get('userPrincipalName', '')
+            
+            if curr_device_id and prev_device_id and curr_device_id == prev_device_id:
+                # Same device - suppress alert (legitimate travel with their device)
                 curr_city = current_loc.get('city', 'Unknown')
                 prev_city = previous_loc.get('city', 'Unknown')
+                device_name = f"{curr_device.get('operatingSystem', 'Unknown')} - {curr_device.get('browser', 'Unknown')}"
                 current_app.logger.info(
-                    f"Suppressed travel alert for {user}: Insufficient risk factors "
-                    f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, "
-                    f"factors: {', '.join(risk_factors) if risk_factors else 'none'})"
+                    f"Suppressed travel alert for {user}: Same device used in both locations "
+                    f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, device: {device_name})"
                 )
-                continue  # Skip - not enough risk factors
+                continue  # Skip flagging this as impossible travel
             
-            # Multiple risk factors detected - this is suspicious
-            risk_level = 'Suspicious'
-            if required_speed_mph > 1000:
-                risk_level = 'High Risk'
-            if required_speed_mph > 10000 or 'different_device' in risk_factors:
-                risk_level = 'Critical'
+            # Check if either location is a trusted baseline for this user
+            curr_rounded = (round(curr_lat, 1), round(curr_lon, 1))
+            prev_rounded = (round(prev_lat, 1), round(prev_lon, 1))
             
-            # Add extra context for domestic US travel
-            if is_domestic_us and required_speed_mph < 1500:
-                risk_level = f'Suspicious ({travel_type} US)'
+            is_current_trusted = curr_rounded in trusted_locations.get(user, set())
+            is_previous_trusted = prev_rounded in trusted_locations.get(user, set())
             
-            current['impossible_travel'] = True
-            current['travel_distance_miles'] = round(distance_miles, 1)
-            current['time_between_hours'] = round(time_diff_hours, 2)
-            current['required_speed_mph'] = round(required_speed_mph, 1)
-            current['risk_level'] = risk_level
-            current['travel_type'] = travel_type
-            current['risk_factors'] = risk_factors  # Track what triggered the alert
-            prev_city = previous_loc.get('city', 'Unknown')
-            prev_state = previous_loc.get('state', '')
-            prev_country = previous_loc.get('countryOrRegion', 'Unknown')
-            current['previous_location'] = f"{prev_city}, {prev_state}, {prev_country}" if prev_state else f"{prev_city}, {prev_country}"
+            if is_current_trusted or is_previous_trusted:
+                # Suppress alert - user is returning to or leaving a trusted location
+                location_name = current_loc.get('city', current_loc.get('countryOrRegion', 'location'))
+                current_app.logger.info(
+                    f"Suppressed travel alert for {user}: {location_name} is a trusted baseline location "
+                    f"({required_speed_mph:.0f} mph would have triggered alert)"
+                )
+                continue  # Skip flagging this as impossible travel
             
-            current_app.logger.warning(
-                f"ALERT: {user} - {prev_city} → {curr_city} ({required_speed_mph:.0f} mph) "
-                f"Risk factors: {', '.join(risk_factors)}"
-            )
-            impossible.append(current)
+            # Determine if domestic or international travel
+            is_domestic_us = (curr_country == 'US' and prev_country == 'US')
+            is_same_country = (curr_country == prev_country)
+            
+            # Apply different thresholds based on travel type
+            # Domestic US travel: Allow up to 1000 mph (cross-country flights, remote workers)
+            # International travel: Strict 500 mph threshold (likely compromise)
+            threshold = 1000 if is_domestic_us else 500
+            
+            # Determine risk level
+            if required_speed_mph > threshold:
+                travel_type = 'Domestic' if is_same_country else 'International'
+                
+                # RISK COMBINATION DETECTION
+                # Only alert if impossible travel is combined with OTHER suspicious factors
+                risk_factors = []
+                
+                # Factor 1: Different device used (potential device compromise)
+                devices_differ = (curr_device_id and prev_device_id and curr_device_id != prev_device_id)
+                if devices_differ:
+                    risk_factors.append('different_device')
+                
+                # Factor 2: New location (never seen in user's history)
+                curr_city = current_loc.get('city', '')
+                is_new_location = curr_rounded not in user_locations.get(user, {})
+                if is_new_location and curr_city:  # Only count if we have city data
+                    risk_factors.append('new_location')
+                
+                # Factor 3: Extremely high speed (>10000 mph - physically impossible even with fast VPN)
+                is_extreme_speed = required_speed_mph > 10000
+                if is_extreme_speed:
+                    risk_factors.append('extreme_speed')
+                
+                # Factor 4: International travel (higher risk than domestic)
+                if not is_same_country:
+                    risk_factors.append('international')
+                
+                # Require at least 2 risk factors to trigger alert
+                # This filters out simple VPN switches and legitimate travel
+                if len(risk_factors) < 2:
+                    curr_city = current_loc.get('city', 'Unknown')
+                    prev_city = previous_loc.get('city', 'Unknown')
+                    current_app.logger.info(
+                        f"Suppressed travel alert for {user}: Insufficient risk factors "
+                        f"({prev_city} → {curr_city}, {required_speed_mph:.0f} mph, "
+                        f"factors: {', '.join(risk_factors) if risk_factors else 'none'})"
+                    )
+                    continue  # Skip - not enough risk factors
+                
+                # Multiple risk factors detected - this is suspicious
+                risk_level = 'Suspicious'
+                if required_speed_mph > 1000:
+                    risk_level = 'High Risk'
+                if required_speed_mph > 10000 or 'different_device' in risk_factors:
+                    risk_level = 'Critical'
+                
+                # Add extra context for domestic US travel
+                if is_domestic_us and required_speed_mph < 1500:
+                    risk_level = f'Suspicious ({travel_type} US)'
+                
+                current['impossible_travel'] = True
+                current['travel_distance_miles'] = round(distance_miles, 1)
+                current['time_between_hours'] = round(time_diff_hours, 2)
+                current['required_speed_mph'] = round(required_speed_mph, 1)
+                current['risk_level'] = risk_level
+                current['travel_type'] = travel_type
+                current['risk_factors'] = risk_factors  # Track what triggered the alert
+                prev_city = previous_loc.get('city', 'Unknown')
+                prev_state = previous_loc.get('state', '')
+                prev_country = previous_loc.get('countryOrRegion', 'Unknown')
+                current['previous_location'] = f"{prev_city}, {prev_state}, {prev_country}" if prev_state else f"{prev_city}, {prev_country}"
+                
+                current_app.logger.warning(
+                    f"ALERT: {user} - {prev_city} → {curr_city} ({required_speed_mph:.0f} mph) "
+                    f"Risk factors: {', '.join(risk_factors)}"
+                )
+                impossible.append(current)
     
     return impossible
 
