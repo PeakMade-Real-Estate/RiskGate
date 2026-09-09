@@ -302,7 +302,7 @@ def perform_automatic_scan(app):
                 
                 if event:
                     event.impossible_travel_detected = True
-                    event.required_travel_speed_mph = impossible_login.get('required_speed')
+                    event.required_travel_speed_mph = impossible_login.get('required_speed_mph', 0)
                     event.local_risk_score = impossible_login.get('risk_score', 0)
                     event.local_risk_level = 'critical' if event.local_risk_score >= 90 else 'high'
                     
