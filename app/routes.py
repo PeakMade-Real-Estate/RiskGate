@@ -121,16 +121,33 @@ def load_latest_automatic_scan():
         users_by_id = {
             u.id: u for u in UserIdentity.query.filter(UserIdentity.id.in_(user_ids)).all()
         } if user_ids else {}
-        alerts = [
-            {
-                'user_principal_name': users_by_id[alert.user_id].user_principal_name
-                if alert.user_id in users_by_id else None,
+        alerts = []
+        for alert in alert_rows:
+            user_identity = users_by_id.get(alert.user_id)
+            signin = alert.related_signin
+            location_parts = [
+                part for part in (signin.city, signin.state, signin.country) if part
+            ] if signin else []
+            alerts.append({
+                'alert_id': alert.id,
+                'alert_type': alert.alert_type,
+                'user_principal_name': user_identity.user_principal_name if user_identity else None,
+                'display_name': user_identity.display_name if user_identity else None,
+                'entra_user_id': user_identity.entra_user_id if user_identity else None,
                 'severity': alert.severity,
+                'status': alert.status,
                 'reason': alert.reason,
                 'created_at': alert.created_at.isoformat() if alert.created_at else None,
-            }
-            for alert in alert_rows
-        ]
+                'signin_location': ', '.join(location_parts) or None,
+                'signin_ip_address': signin.ip_address if signin else None,
+                'signin_time': signin.created_at.isoformat() if signin and signin.created_at else None,
+                'required_travel_speed_mph': signin.required_travel_speed_mph if signin else None,
+            })
+
+        # Pre-joined so a notification flow can drop it straight into a message body.
+        flagged_users = sorted({
+            alert['user_principal_name'] for alert in alerts if alert['user_principal_name']
+        })
 
         return {
             'scan_type': scan.scan_type,
@@ -144,6 +161,7 @@ def load_latest_automatic_scan():
             'signin_events': scan.events_found or 0,
             'impossible_logins': len(alert_rows),
             'alerts_created': scan.alerts_created or 0,
+            'impossible_login_users': ', '.join(flagged_users),
             'alerts': alerts,
         }
     except Exception as error:
@@ -643,6 +661,7 @@ def scan_entra():
         # Fetch and process MFA changes (authentication method changes)
         mfa_events = []
         mfa_change_times = set()
+        mfa_change_times_by_user = {}  # user email (lowercase) -> set of change datetimes
         correlated_mfa_events = []
         
         # Build set of scanned user emails for filtering
@@ -682,6 +701,8 @@ def scan_entra():
                         # FILTER: Only include MFA events for users that were scanned
                         if target_user.lower() not in scanned_user_emails:
                             continue
+                        
+                        mfa_change_times_by_user.setdefault(target_user.lower(), set()).add(mfa_time)
                         
                         # Extract who initiated
                         initiated_by = audit.get('initiatedBy', {}) or {}
@@ -787,7 +808,10 @@ def scan_entra():
             from dateutil import parser
             login_time = parser.parse(login.get('createdDateTime'))
             login_user = login.get('userPrincipalName', 'N/A')
-            mfa_changed_after = any(abs((mfa_time - login_time).total_seconds()) < 3600 for mfa_time in mfa_change_times)
+            # Only correlate an MFA change with THIS login if it belongs to the same user -
+            # previously this checked mfa_change_times (every user's changes tenant-wide).
+            user_mfa_times = mfa_change_times_by_user.get(login_user.lower(), set())
+            mfa_changed_after = any(abs((mfa_time - login_time).total_seconds()) < 3600 for mfa_time in user_mfa_times)
             
             # Find specific MFA event details if correlated
             mfa_details = None
@@ -926,6 +950,9 @@ def analyze_impossible_travel(signin_logs):
     - Domestic US travel: More lenient (threshold 1000+ mph) - recognizes remote workers
     - International travel: Strict (threshold 500+ mph) - likely account compromise
     - Trusted locations: Learns baseline locations for each user to prevent false positives
+    - VPN/remote-worker aware: same-device or trusted-location logins are only overridden by
+      a country change, never by speed alone, since VPN/proxy egress-node hopping routinely
+      reports impossible domestic speeds for a single physical remote worker
     """
     impossible = []
     
@@ -975,6 +1002,13 @@ def analyze_impossible_travel(signin_logs):
         # Sort this user's logs by time
         sorted_user_logs = sorted(user_logs, key=lambda x: x.get('createdDateTime', ''))
         
+        # Tracks locations actually seen earlier in this user's own timeline (not the whole batch)
+        seen_locations = {}
+        first_coords = sorted_user_logs[0].get('location', {}).get('geoCoordinates', {})
+        first_lat, first_lon = first_coords.get('latitude'), first_coords.get('longitude')
+        if first_lat and first_lon:
+            seen_locations[(round(first_lat, 1), round(first_lon, 1))] = 1
+        
         # Compare consecutive sign-ins for this user only
         for i in range(1, len(sorted_user_logs)):
             current = sorted_user_logs[i]
@@ -997,6 +1031,11 @@ def analyze_impossible_travel(signin_logs):
             if not all([curr_lat, curr_lon, prev_lat, prev_lon]):
                 continue
             
+            # Record location history before evaluating, so "new" reflects this user's prior logins only
+            curr_rounded = (round(curr_lat, 1), round(curr_lon, 1))
+            was_seen_before = curr_rounded in seen_locations
+            seen_locations[curr_rounded] = seen_locations.get(curr_rounded, 0) + 1
+            
             # Calculate distance
             distance_miles = calculate_distance(prev_lat, prev_lon, curr_lat, curr_lon)
             
@@ -1017,6 +1056,10 @@ def analyze_impossible_travel(signin_logs):
             # Calculate required speed
             required_speed_mph = distance_miles / time_diff_hours
             
+            # A country change is a real compromise signal (session/token replay); pure speed is not,
+            # since VPN/proxy egress nodes routinely make a single remote worker look impossibly fast
+            country_changed = curr_country != prev_country
+            
             # Check if same device was used (device-based trust)
             # If the same physical device made both logins, it's likely the same person traveling
             curr_device = current.get('deviceDetail', {})
@@ -1026,8 +1069,9 @@ def analyze_impossible_travel(signin_logs):
             
             user = current.get('userPrincipalName', '')
             
-            if curr_device_id and prev_device_id and curr_device_id == prev_device_id:
-                # Same device - suppress alert (legitimate travel with their device)
+            if curr_device_id and prev_device_id and curr_device_id == prev_device_id and not country_changed:
+                # Same device, same country - suppress alert regardless of speed (VPN egress jitter
+                # for a legitimate remote worker, not travel)
                 curr_city = current_loc.get('city', 'Unknown')
                 prev_city = previous_loc.get('city', 'Unknown')
                 device_name = f"{curr_device.get('operatingSystem', 'Unknown')} - {curr_device.get('browser', 'Unknown')}"
@@ -1038,14 +1082,14 @@ def analyze_impossible_travel(signin_logs):
                 continue  # Skip flagging this as impossible travel
             
             # Check if either location is a trusted baseline for this user
-            curr_rounded = (round(curr_lat, 1), round(curr_lon, 1))
             prev_rounded = (round(prev_lat, 1), round(prev_lon, 1))
             
             is_current_trusted = curr_rounded in trusted_locations.get(user, set())
             is_previous_trusted = prev_rounded in trusted_locations.get(user, set())
             
-            if is_current_trusted or is_previous_trusted:
-                # Suppress alert - user is returning to or leaving a trusted location
+            if (is_current_trusted or is_previous_trusted) and not country_changed:
+                # Suppress alert - user is returning to or leaving a trusted location, same country
+                # (VPN nodes bouncing a remote worker between known and nearby locations is expected)
                 location_name = current_loc.get('city', current_loc.get('countryOrRegion', 'location'))
                 current_app.logger.info(
                     f"Suppressed travel alert for {user}: {location_name} is a trusted baseline location "
@@ -1058,9 +1102,10 @@ def analyze_impossible_travel(signin_logs):
             is_same_country = (curr_country == prev_country)
             
             # Apply different thresholds based on travel type
-            # Domestic US travel: Allow up to 1000 mph (cross-country flights, remote workers)
-            # International travel: Strict 500 mph threshold (likely compromise)
-            threshold = 1000 if is_domestic_us else 500
+            # Domestic US travel: Allow up to TRAVEL_SPEED_EXTREME mph (cross-country flights, remote workers)
+            # International travel: Strict TRAVEL_SPEED_IMPOSSIBLE mph threshold (likely compromise)
+            threshold = current_app.config.get('TRAVEL_SPEED_EXTREME', 1000) if is_domestic_us \
+                else current_app.config.get('TRAVEL_SPEED_IMPOSSIBLE', 500)
             
             # Determine risk level
             if required_speed_mph > threshold:
@@ -1075,9 +1120,9 @@ def analyze_impossible_travel(signin_logs):
                 if devices_differ:
                     risk_factors.append('different_device')
                 
-                # Factor 2: New location (never seen in user's history)
+                # Factor 2: New location (never seen earlier in this user's own sign-in history)
                 curr_city = current_loc.get('city', '')
-                is_new_location = curr_rounded not in user_locations.get(user, {})
+                is_new_location = not was_seen_before
                 if is_new_location and curr_city:  # Only count if we have city data
                     risk_factors.append('new_location')
                 
@@ -1104,7 +1149,7 @@ def analyze_impossible_travel(signin_logs):
                 
                 # Multiple risk factors detected - this is suspicious
                 risk_level = 'Suspicious'
-                if required_speed_mph > 1000:
+                if required_speed_mph > current_app.config.get('TRAVEL_SPEED_EXTREME', 1000):
                     risk_level = 'High Risk'
                 if required_speed_mph > 10000 or 'different_device' in risk_factors:
                     risk_level = 'Critical'

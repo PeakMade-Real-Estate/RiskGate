@@ -14,6 +14,31 @@ logger = logging.getLogger(__name__)
 scheduler = None
 
 
+def describe_travel_route(incident):
+    """
+    Normalize an incident from analyze_impossible_travel() into display fields.
+
+    analyze_impossible_travel returns the current sign-in log annotated in place,
+    so the route data lives under Graph's key names rather than flat ones.
+    """
+    location = incident.get('location') or {}
+    city = location.get('city') or ''
+    state = location.get('state') or ''
+    country = location.get('countryOrRegion') or ''
+    to_location = ', '.join(part for part in (city, state, country) if part) or 'Unknown location'
+
+    risk_factors = incident.get('risk_factors') or []
+
+    return {
+        'from_location': incident.get('previous_location') or 'Unknown location',
+        'to_location': to_location,
+        'distance_miles': incident.get('travel_distance_miles') or 0,
+        'hours_between': incident.get('time_between_hours') or 0,
+        'required_speed_mph': incident.get('required_speed_mph') or 0,
+        'risk_factors': ', '.join(risk_factors),
+    }
+
+
 def perform_automatic_scan(app):
     """
     Execute an automatic scan of all configured users/groups.
@@ -272,17 +297,12 @@ def perform_automatic_scan(app):
                 print(f"\n[SCAN] ⚠️  Found {len(impossible_logins)} impossible travel incident(s):")
                 logger.warning(f"Found {len(impossible_logins)} impossible travel incidents")
                 for i, incident in enumerate(impossible_logins[:5], 1):  # Show first 5
-                    user = incident.get('userPrincipalName', 'Unknown')
-                    speed = incident.get('required_speed') or incident.get('required_speed_mph', 0)
-                    distance = incident.get('distance_miles', 0)
-                    time_diff = incident.get('time_diff_hours', 0)
-                    prev_city = incident.get('prev_city', 'Unknown')
-                    current_city = incident.get('city', 'Unknown')
-                    print(f"    {i}. {user}")
-                    print(f"       Route: {prev_city} → {current_city}")
-                    print(f"       Distance: {distance:.1f} miles")
-                    print(f"       Time: {time_diff:.1f} hours")
-                    print(f"       Required speed: {speed:.0f} mph")
+                    route = describe_travel_route(incident)
+                    print(f"    {i}. {incident.get('userPrincipalName', 'Unknown')}")
+                    print(f"       Route: {route['from_location']} → {route['to_location']}")
+                    print(f"       Distance: {route['distance_miles']:.1f} miles")
+                    print(f"       Time: {route['hours_between']:.2f} hours")
+                    print(f"       Required speed: {route['required_speed_mph']:.0f} mph")
                 if len(impossible_logins) > 5:
                     print(f"    ... and {len(impossible_logins) - 5} more")
                 print()
@@ -299,25 +319,57 @@ def perform_automatic_scan(app):
                 event = existing_events.get(event_id) or EntraSignInEvent.query.filter_by(
                     microsoft_event_id=event_id
                 ).first()
-                
-                if event:
-                    event.impossible_travel_detected = True
-                    event.required_travel_speed_mph = impossible_login.get('required_speed_mph', 0)
-                    event.local_risk_score = impossible_login.get('risk_score', 0)
-                    event.local_risk_level = 'critical' if event.local_risk_score >= 90 else 'high'
-                    
-                    # Create security alert
-                    alert = EntraSecurityAlert(
-                        user_id=event.user_id,
-                        alert_type='impossible_login',
-                        severity='critical' if event.required_travel_speed_mph > 1000 else 'high',
-                        reason=f"Impossible travel detected: {event.required_travel_speed_mph:.0f} mph required",
-                        status='open',
-                        created_at=datetime.utcnow(),
-                        related_signin_event_id=event.id
+
+                if not event:
+                    logger.warning(
+                        "Impossible travel incident for %s could not be matched to a stored "
+                        "sign-in event (microsoft_event_id=%s); no alert created",
+                        impossible_login.get('userPrincipalName', 'Unknown'), event_id
                     )
-                    db.session.add(alert)
-                    alerts_created += 1
+                    continue
+
+                route = describe_travel_route(impossible_login)
+                speed = route['required_speed_mph']
+
+                event.impossible_travel_detected = True
+                event.required_travel_speed_mph = speed
+                event.local_risk_score = (
+                    app.config['RISK_SCORE_EXTREME_TRAVEL']
+                    if speed > app.config['TRAVEL_SPEED_EXTREME']
+                    else app.config['RISK_SCORE_IMPOSSIBLE_TRAVEL']
+                )
+                event.local_risk_level = (
+                    'critical'
+                    if event.local_risk_score >= app.config['RISK_THRESHOLD_CRITICAL']
+                    else 'high'
+                )
+
+                # The scan window overlaps previous runs, so the same sign-in would
+                # otherwise raise a new alert (and a new notification) every cycle.
+                existing_alert = EntraSecurityAlert.query.filter_by(
+                    alert_type='impossible_login',
+                    related_signin_event_id=event.id
+                ).first()
+                if existing_alert:
+                    continue
+
+                alert = EntraSecurityAlert(
+                    user_id=event.user_id,
+                    alert_type='impossible_login',
+                    severity='critical' if speed > app.config['TRAVEL_SPEED_EXTREME'] else 'high',
+                    reason=(
+                        f"Impossible travel detected: {route['from_location']} → "
+                        f"{route['to_location']}, {route['distance_miles']:.0f} miles in "
+                        f"{route['hours_between']:.2f} hours ({speed:.0f} mph required). "
+                        f"Risk factors: {route['risk_factors'] or 'none recorded'}. "
+                        f"VPN or proxy use can cause false positives."
+                    ),
+                    status='open',
+                    created_at=datetime.utcnow(),
+                    related_signin_event_id=event.id
+                )
+                db.session.add(alert)
+                alerts_created += 1
             
             db.session.commit()
             

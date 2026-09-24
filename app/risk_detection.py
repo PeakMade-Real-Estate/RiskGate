@@ -1,6 +1,9 @@
 """
 Risk detection and impossible travel analysis for SecurityScan.
 
+NOT CALLED FROM PRODUCTION as of 2026-09-22 (see SecurityScan_Data_Dictionary.md Part 1.6/Part 3).
+The live detection path is app/routes.py::analyze_impossible_travel(), invoked from app/scheduler.py.
+
 Core logic for identifying suspicious login patterns from Microsoft Entra sign-in logs.
 
 IMPORTANT: Impossible travel detection is a risk signal, not proof of compromise.

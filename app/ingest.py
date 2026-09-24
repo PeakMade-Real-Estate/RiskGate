@@ -9,6 +9,13 @@ Handles:
 - User identity creation/updates
 
 Prevents duplicate ingestion using microsoft_event_id.
+
+NOTE: only get_or_create_user_identity() is exercised indirectly; the batch ingestion
+functions (ingest_signin_event, ingest_audit_event, ingest_auth_method_snapshot and their
+batch wrappers) have NO CALLER in app/routes.py or app/scheduler.py as of 2026-09-22
+(see SecurityScan_Data_Dictionary.md Part 1.2-1.4) - entra_mfa_event and
+user_auth_method_snapshot are confirmed 0 rows live; the live scan pipeline constructs
+EntraSignInEvent directly in app/scheduler.py instead of calling ingest_signin_event().
 """
 import json
 from datetime import datetime

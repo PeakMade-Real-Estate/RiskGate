@@ -290,6 +290,45 @@ class GraphClient:
         
         return None
     
+    def fetch_all_users(self, max_results=999):
+        """
+        Fetch all users in the tenant from Microsoft Entra with pagination support.
+
+        Args:
+            max_results: Maximum number of users to fetch per page (default 999)
+
+        Returns:
+            List of user objects (id, userPrincipalName, displayName, mail, accountEnabled)
+        """
+        url = "https://graph.microsoft.com/v1.0/users"
+        params = {
+            '$select': 'id,userPrincipalName,displayName,mail,accountEnabled',
+            '$top': max_results
+        }
+
+        current_app.logger.info("Fetching all users from Entra ID...")
+
+        all_users = []
+        page_count = 0
+
+        while url:
+            page_count += 1
+            result = self._make_request(url, params if page_count == 1 else None)
+
+            if not result or 'value' not in result:
+                current_app.logger.warning("No users retrieved")
+                break
+
+            all_users.extend(result['value'])
+
+            # Check for next page
+            url = result.get('@odata.nextLink')
+            if url:
+                current_app.logger.info(f"Fetching page {page_count + 1} of users...")
+
+        current_app.logger.info(f"Fetched {len(all_users)} total users across {page_count} page(s)")
+        return all_users
+
     def fetch_groups(self, max_results=999):
         """
         Fetch all groups from Microsoft Entra with pagination support.

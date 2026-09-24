@@ -9,6 +9,10 @@ Creates security alerts when suspicious patterns are detected:
 - Temporary Access Pass created after risk event
 
 Prevents duplicate alerts for the same event combinations.
+
+NOTE: create_security_alert() has NO CALLER anywhere in the repo as of 2026-09-22
+(see SecurityScan_Data_Dictionary.md Part 1.7) - live alerts (alert_type='impossible_login'
+only, 83/83 rows) are created directly in app/scheduler.py, not via this module.
 """
 from datetime import datetime
 from flask import current_app

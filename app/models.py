@@ -1,5 +1,12 @@
 """
 Database models for the SecurityScan security application.
+
+NOTE: this legacy schema (users, login_events, mfa_methods, mfa_events, security_alerts,
+trusted_devices) does NOT PHYSICALLY EXIST in the live production database as of
+2026-09-22 (initial migration 219ba38d041b was never applied there) - see
+SecurityScan_Data_Dictionary.md Part 2. Live auth runs through Azure App Service Easy
+Auth headers (app/routes.py::get_easy_auth_user()), not this User table. The live schema
+is app/models_new.py.
 """
 from datetime import datetime, timedelta
 from app import db, login_manager

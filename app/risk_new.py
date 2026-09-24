@@ -1,6 +1,9 @@
 """
 Risk detection and analysis for Microsoft Entra sign-in events.
 
+NOT CALLED FROM PRODUCTION as of 2026-09-22 (see SecurityScan_Data_Dictionary.md Part 1.6).
+user_risk_state is confirmed 0 rows live; app/routes.py/app/scheduler.py don't call this module.
+
 Core security logic:
 - Impossible travel detection using Haversine formula
 - Risk score calculation from multiple signals

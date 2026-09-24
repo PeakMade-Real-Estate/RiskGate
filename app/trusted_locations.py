@@ -3,6 +3,11 @@ Trusted Location Management for SecurityScan.
 
 Learns baseline locations for users to prevent false positives for remote workers.
 A user who consistently logs in from their home office won't trigger travel alerts.
+
+NOTE: this module's population path is NOT CALLED FROM PRODUCTION as of 2026-09-22
+(see SecurityScan_Data_Dictionary.md Part 1.5) - user_trusted_location is confirmed 0 rows
+live. The live impossible-travel path has its own separate in-memory trusted-location
+logic in app/routes.py::analyze_impossible_travel().
 """
 from datetime import datetime, timedelta
 from flask import current_app

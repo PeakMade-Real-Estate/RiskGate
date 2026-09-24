@@ -159,8 +159,7 @@
                         <thead style="background-color: #f8f9fa; position: sticky; top: 0;">
                             <tr>
                                 <th style="padding: 3px 6px;">User</th>
-                                <th style="padding: 3px 6px;">Locations</th>
-                                <th style="padding: 3px 6px;">Distance</th>
+                                <th style="padding: 3px 6px;">Location</th>
                                 <th style="padding: 3px 6px;">Speed Required</th>
                                 <th style="padding: 3px 6px;">Severity</th>
                             </tr>
@@ -168,13 +167,12 @@
                         <tbody>
                             {% for alert in automatic_scan.alerts[:10] %}
                             <tr>
-                                <td style="padding: 3px 6px;">{{ alert.user.split('@')[0] }}</td>
-                                <td style="padding: 3px 6px;">{{ alert.locations }}</td>
-                                <td style="padding: 3px 6px;">{{ alert.distance_miles|round(1) }} mi</td>
-                                <td style="padding: 3px 6px;"><strong style="color: #dc3545;">{{ alert.required_speed_mph|round(0) }} mph</strong></td>
+                                <td style="padding: 3px 6px;">{{ (alert.user_principal_name or alert.display_name or 'Unknown').split('@')[0] }}</td>
+                                <td style="padding: 3px 6px;">{{ alert.signin_location or 'Unknown' }}</td>
+                                <td style="padding: 3px 6px;"><strong style="color: #dc3545;">{{ (alert.required_travel_speed_mph or 0)|round(0) }} mph</strong></td>
                                 <td style="padding: 3px 6px;">
                                     <span class="badge {% if alert.severity == 'critical' %}bg-danger{% else %}bg-warning text-dark{% endif %}" style="font-size: 0.7rem;">
-                                        {{ alert.severity|upper }}
+                                        {{ (alert.severity or '')|upper }}
                                     </span>
                                 </td>
                             </tr>
